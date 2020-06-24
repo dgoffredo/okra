@@ -1,0 +1,6 @@
+[submodule "tisch"]
+	path = tisch
+	url = https://github.com/dgoffredo/tisch.git
+[submodule "protojson"]
+	path = protojson
+	url = https://github.com/dgoffredo/protojson.git
