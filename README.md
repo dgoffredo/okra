@@ -2,7 +2,7 @@
 
 okra
 ====
-the **ok**cupid **r**elational **a**utomator
+the **ok**ay **r**elational **a**utomator
 
 Why
 ---
