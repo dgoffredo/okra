@@ -6,19 +6,24 @@
 //
 ({
     'name': String,
+    'description?': String, // e.g. COMMENT section in MySQL
     'columns': [{
         'name': String,
-        // `protobuf_type` values are a subset of the names of the enum values
+        // `protobuf_type` values are either a subset of the names of the enum values
         // in `enum FieldDescriptorProto.Type` in
-        // `google/protobuf/descriptor.proto`, which as of this writing is
-        // available on github.
-        // The types "TYPE_MESSAGE" and "TYPE_ENUM" are omitted -- messages
-        // aren't applicable, and enums are instead represented using
-        // "TYPE_INT32". Also, all of the "FIXED" integer types are omitted --
-        // their non-fixed equivalents are used instead. Finally, the explicitly
-        // signed (i.e. with an "S") integer types are omitted -- their plain
-        // equivalents are used instead (e.g. instead of "TYPE_SINT64", use
-        // "TYPE_INT64").
+        // `google/protobuf/descriptor.proto`, or the fully qualified protobuf
+        // type name of one of Google's "well-known types" (e.g.
+        // ".google.protobuf.Timestamp").
+        // A few things to note:
+        // - The types "TYPE_MESSAGE" and "TYPE_ENUM" are omitted. Messages
+        //   aren't applicable, and enums are instead represented using
+        //   "TYPE_INT32".
+        // - All of the "FIXED" integer types are omitted. Their non-fixed
+        //   equivalents are used instead (e.g. instead of "TYPE_FIXED64", use
+        //   "TYPE_UINT64").
+        // - The explicitly signed (i.e. with an "S") integer types are
+        //   omitted. Their plain equivalents are used instead (e.g. instead of
+        //   "TYPE_SINT64", use "TYPE_INT64").
         'protobuf_type': or(
             'TYPE_DOUBLE',
             'TYPE_FLOAT',
@@ -28,11 +33,13 @@
             'TYPE_UINT32',
             'TYPE_BOOL',
             'TYPE_STRING',
-            'TYPE_BYTES'),
+            'TYPE_BYTES',
+            '.google.protobuf.Timestamp'),
         'foreign_key?': {
             'table': String, // name of the foreign table
             'column': String  // name of the column in the foreign table
         },
-        'primary_key?': Boolean
+        'primary_key?': Boolean,
+        'description?': String // e.g. COMMENT section in MySQL
     }, ...etc]
 })
