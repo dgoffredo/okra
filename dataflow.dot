@@ -1,0 +1,12 @@
+digraph {
+    bgcolor="transparent"
+    rankdir=LR
+
+    ".proto schema" -> "okra types"
+    "okra types" -> "okra tables"
+    "okra tables" -> "MySQL statements"
+    "okra tables" -> "SQLite Statements"
+    "okra types" -> "okra CRUD"
+    "okra CRUD" -> "Go package"
+    "okra CRUD" -> "Python module"
+}
