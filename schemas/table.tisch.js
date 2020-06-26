@@ -24,6 +24,7 @@
         // - The explicitly signed (i.e. with an "S") integer types are
         //   omitted. Their plain equivalents are used instead (e.g. instead of
         //   "TYPE_SINT64", use "TYPE_INT64").
+        // TODO: use 'protobuf_type': builtin
         'protobuf_type': or(
             'TYPE_DOUBLE',
             'TYPE_FLOAT',
