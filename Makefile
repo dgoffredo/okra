@@ -1,2 +1,2 @@
-dataflow.svg: dataflow.dot
+images/dataflow.svg: images/dataflow.dot
 	dot -Tsvg <$^ >$@

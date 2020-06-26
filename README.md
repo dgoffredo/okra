@@ -1,4 +1,4 @@
-<img align="right" width="300" src="okra.svg"/>
+<img align="right" width="300" src="images/okra.svg"/>
 
 okra
 ====
@@ -16,7 +16,7 @@ How
 ---
 TODO
 
-![](dataflow.svg)
+![](images/dataflow.svg)
 
 More
 ----
