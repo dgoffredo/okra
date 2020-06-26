@@ -1,12 +1,13 @@
 define(['builtin.tisch.js'], builtin => 
     or(
-        // TODO: doc
+        // A "scalar" (basic, builtin, fundamental, atomic) type, e.g. an
+        // integer or a string.
         {
             'kind': 'builtin',
             'name': builtin
         },
     
-        // TODO: doc
+        // A user-defined enumeration, i.e. a protobuf `enum`.
         {
             'kind': 'enum',
             'name': String,
@@ -18,7 +19,7 @@ define(['builtin.tisch.js'], builtin =>
             }, ...etc]
         },
     
-        // TODO: doc
+        // A user-defined aggregate type, i.e. a protobuf `message`.
         {
             'kind': 'message',
             'name': String,
@@ -26,8 +27,7 @@ define(['builtin.tisch.js'], builtin =>
             'fields': [{
                 'id': Number,
                 'name': String,
-                'is_array': Boolean, // TODO is_array versus type: {array: ...}
-                'type': (scalar => or(scalar, {"array": scalar}))(
+                'type': (scalar => or(scalar, {'array': scalar}))(
                     or({'builtin': builtin},
                         {'enum': String})),
                 'description?': String
