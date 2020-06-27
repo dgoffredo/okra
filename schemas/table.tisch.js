@@ -16,5 +16,6 @@ define(['./builtin.tisch.js'], builtin => ({
         },
         'primary_key?': Boolean,
         'description?': String // e.g. COMMENT section in MySQL
-    }, ...etc]
+    }, ...etc],
+    'rows?': [builtin, ...etc]
 }))
