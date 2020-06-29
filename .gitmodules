@@ -1,9 +1,9 @@
 [submodule "tisch"]
-	path = tisch
+	path = dependencies/tisch
 	url = https://github.com/dgoffredo/tisch.git
 [submodule "protojson"]
-	path = protojson
+	path = dependencies/protojson
 	url = https://github.com/dgoffredo/protojson.git
 [submodule "node-amd-loader"]
-	path = node-amd-loader
+	path = dependencies/node-amd-loader
 	url = https://github.com/ajaxorg/node-amd-loader.git
