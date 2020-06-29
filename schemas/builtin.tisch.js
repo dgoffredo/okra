@@ -6,8 +6,8 @@
 // A few things to note:
 //
 // - The types "TYPE_MESSAGE" and "TYPE_ENUM" are omitted. Messages
-//   aren't applicable, and enums are instead represented using
-//   "TYPE_INT32".
+//   aren't applicable (they're not in any sense "built in"), and enums are
+//   instead represented using "TYPE_INT32".
 // - All of the "FIXED" integer types are omitted. Their non-fixed
 //   equivalents are used instead (e.g. instead of "TYPE_FIXED64", use
 //   "TYPE_UINT64").

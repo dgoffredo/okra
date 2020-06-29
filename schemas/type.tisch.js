@@ -1,12 +1,10 @@
 define(['builtin.tisch.js'], builtin => 
+    // Note that all non-builtin type names (i.e. the names of enums and
+    // messages) are fully qualified with their protobuf namespaces, including
+    // the initial "." denoting the toplevel namespace.
+    //
+    // For example,  TODO
     or(
-        // A "scalar" (basic, builtin, fundamental, atomic) type, e.g. an
-        // integer or a string.
-        {
-            'kind': 'builtin',
-            'name': builtin
-        },
-    
         // A user-defined enumeration, i.e. a protobuf `enum`.
         {
             'kind': 'enum',

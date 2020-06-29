@@ -4,3 +4,6 @@
 [submodule "protojson"]
 	path = protojson
 	url = https://github.com/dgoffredo/protojson.git
+[submodule "node-amd-loader"]
+	path = node-amd-loader
+	url = https://github.com/ajaxorg/node-amd-loader.git
