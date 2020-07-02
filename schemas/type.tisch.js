@@ -20,8 +20,10 @@ define(['builtin.tisch.js'], builtin =>
             'kind': 'message',
             'name': String,
             'description?': String,
+            // name of the field that identifies this object (e.g. "id")
+            'idFieldName': String,
             'fields': [{
-                'id': Number,
+                'id': Number, // protobuf message fields have integer IDs
                 'name': String,
                 'type': or(
                     {'builtin': builtin},

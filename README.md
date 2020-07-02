@@ -29,7 +29,7 @@ TODO
 More
 ----
 ### Dependencies
-- node
+- Node.js v12
 - protoc (the protocol buffer compiler and its Python libraries)
 - Python 3
 
