@@ -23,9 +23,11 @@ define(['builtin.tisch.js'], builtin =>
             'fields': [{
                 'id': Number,
                 'name': String,
-                'type': (scalar => or(scalar, {'array': scalar}))(
-                    or({'builtin': builtin},
-                        {'enum': String})),
+                'type': or(
+                    {'builtin': builtin},
+                    {'enum': String},
+                    {'array': {'builtin': builtin}},
+                    {'array': {'enum': String}}),
                 'description?': String
             }, ...etc]
         }));

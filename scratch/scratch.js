@@ -10,7 +10,7 @@ const types = proto2types({
     protoFiles: [
         path.join(__dirname, '..', 'dependencies/protojson/example/hello.proto')
     ],
-    rootTypes: ['Hello']
+    rootTypes: ['sassafras.sassafras.Hello']
 })
 
 module.exports = {
