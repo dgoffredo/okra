@@ -7,11 +7,11 @@
 define(['./builtin.tisch.js'], builtin => ({
     'name': String,
     'description?': String, // e.g. COMMENT section in MySQL
-    'primary_key': String, // column name of the primary key
+    'primaryKey': String, // column name of the primary key
     'columns': [{
         'name': String,
-        'protobuf_type': builtin,
-        'foreign_key?': {
+        'protobufType': builtin,
+        'foreignKey?': {
             'table': String, // name of the foreign table
             'column': String  // name of the column in the foreign table
         },

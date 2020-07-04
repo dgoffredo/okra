@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package foobar;
+
+message Parent {
+    int64 id = 1;
+    Child child = 2; // not allowed
+}
+
+message Child {
+    int32 id = 1;
+}
+
+

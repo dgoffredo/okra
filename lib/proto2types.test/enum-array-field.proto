@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package foobar;
+
+message Grill {
+    int64 id = 1;
+    repeated Hotdog hotdog = 2;
+}
+
+enum Hotdog {
+    UNSET = 0;
+    BEEF = 1;
+    TURKEY = 3;
+}
+

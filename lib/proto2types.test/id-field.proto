@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package sassafras.sassafras;
+
+// This is the same as `no-id-field.proto`, except that this message _does_
+// have an "id" field, so Okra will accept it.
+message Hello {
+    string name = 2;
+    fixed64 snake_case = 4;
+    fixed64 camelCase = 5;
+    int32 id = 6; // it need not be first or last, and the type doesn't matter
+    fixed64 SHOUTING_CASE = 7;
+    fixed64 PascalCase = 8;
+}

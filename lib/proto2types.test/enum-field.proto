@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package foobar;
+
+message Menu {
+    int64 id = 1;
+    Hotdog hotdog = 2;
+}
+
+enum Hotdog {
+    UNSET = 0;
+    BEEF = 1;
+    TURKEY = 3;
+}

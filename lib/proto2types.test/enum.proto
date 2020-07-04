@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package foobar;
+
+enum Hotdog {
+    UNSET = 0;
+    KOSHER_BEEF = 1;
+    NONKOSHER_BEEF = 2;
+    TURKEY = 3;
+    FAUX_MEAT = 4;
+    CARROT = 5;
+    MYSTERY_MEAT = 6;
+}
