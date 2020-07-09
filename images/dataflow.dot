@@ -1,13 +1,21 @@
 digraph {
     bgcolor="transparent"
-    rankdir=LR
+    rankdir=LR // left-to-right
 
     ".proto schema" -> "okra types"
     "okra types" -> "okra tables"
     "okra types" -> "okra legends"
     "okra tables" -> "okra CRUD"
     "okra legends" -> "okra CRUD"
+
+    // The SQL tables are an output, so the node is a box.
+    "MySQL/SQLite/etc. tables" [shape=box]
+
     "okra tables" -> "MySQL/SQLite/etc. tables"
+
+    // The Go/Python/etc. code is an output, so the node is a box.
+    "Go/Python/etc. package" [shape=box]
+
     "okra CRUD" -> "Go/Python/etc. package"
     "okra types" -> "Go/Python/etc. package"
 }
