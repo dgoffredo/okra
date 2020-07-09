@@ -23,7 +23,11 @@ define(['builtin.tisch.js'], builtin =>
             // name of the field that identifies this object (e.g. "id")
             'idFieldName': String,
             'fields': [{
-                'id': Number, // protobuf message fields have integer IDs
+                // Protobuf message fields have integer IDs. I think that
+                // they're mostly for efficient encoding (minimal field tags).
+                // I have no use for them, but I keep them here because why
+                // not. Maybe some CRUD backend will make use of the IDs.
+                'id': Number,
                 'name': String,
                 'type': or(
                     {'builtin': builtin},
