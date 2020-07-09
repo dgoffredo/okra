@@ -4,9 +4,10 @@ digraph {
 
     ".proto schema" -> "okra types"
     "okra types" -> "okra tables"
-    "okra tables" -> "MySQL statements"
-    "okra tables" -> "SQLite Statements"
-    "okra types" -> "okra CRUD"
-    "okra CRUD" -> "Go package"
-    "okra CRUD" -> "Python module"
+    "okra types" -> "okra legends"
+    "okra tables" -> "okra CRUD"
+    "okra legends" -> "okra CRUD"
+    "okra tables" -> "MySQL/SQLite/etc. tables"
+    "okra CRUD" -> "Go/Python/etc. package"
+    "okra types" -> "Go/Python/etc. package"
 }
