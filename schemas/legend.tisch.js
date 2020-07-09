@@ -9,8 +9,8 @@
 ({
     messageTypeName: String, // fully qualified, e.g. ".foo.bar.Shoe"
     tableName: String, // e.g. "shoe"
-    // The `fieldSources` do not necessarily come in the same order as the
-    // fields in the protobuf type. They correspond by name (`.fieldName`).
+    // The `fieldSources` will come in the same order as the fields in the
+    // protobuf type. They also correspond by name (`.fieldName`).
     fieldSources: [or({
         // Each non-array field has a column in the message's table.
         fieldName: String, // e.g. "color"
