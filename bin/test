@@ -1,0 +1,14 @@
+#!/bin/sh
+
+set -e # bail if any command terminates with a nonzero status
+
+# lib/ directory of this repository. The unit tests are under there.
+libdir=$(dirname $(dirname $(realpath $0)))/lib
+
+for test_driver in $libdir/*.test/test.js; do
+    echo "Running test driver $test_driver..."
+    $test_driver
+done
+
+echo
+echo "All tests passed."

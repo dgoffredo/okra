@@ -14,13 +14,13 @@ define(['./table.tisch.js', './alteration.tisch.js'], function (table, alteratio
         // The keys of "all_tables" are the table names.
         // This is here so that a SQL code generator can look up information
         // about existing tables, e.g. the type of a primary key column.
-        'all_tables': {
+        'allTables': {
             [Any]: table,
             ...etc
         },
 
         // Tables to add. The keys of "new_tables" are the table names.
-        'new_tables': {
+        'newTables': {
             [Any]: table,
             ...etc
         },
@@ -45,7 +45,7 @@ define(['./table.tisch.js', './alteration.tisch.js'], function (table, alteratio
                     'primaryKeyValue': or(Number, String),
                     // columns to update, and which values to set them to;
                     // each entry is a (column_name, new_value) pair.
-                    'column_values': {
+                    'columnValues': {
                         [Any]: or(Number, String, null),
                         ...etc(1)
                     }
