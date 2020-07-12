@@ -7,6 +7,7 @@ define(['./builtin.tisch.js'], function (builtin) {
             // There are two modifications that can be made to an existing column:
             // - change to type, e.g. to widen an integer
             // - change the documentation
+            'name': String,
             'type?': builtin,
             'description?': String // e.g. COMMENT section in MySQL
         },
