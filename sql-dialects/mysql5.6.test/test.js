@@ -12,8 +12,8 @@ const {types2tables} = require('../../lib/types2tables');
 const {dbdiff2sql} = require('../mysql5.6');
 
 const types = proto2types({
-    // protoFiles: [__dirname + '/../../lib/proto2types.test/enum-array-field.proto']
-    protoFiles: [__dirname + '/../../lib/proto2types.test/id-field.proto']
+    protoFiles: [__dirname + '/../../lib/proto2types.test/enum-array-field.proto']
+    // protoFiles: [__dirname + '/../../lib/proto2types.test/id-field.proto']
 });
 
 const tables = types2tables(types);

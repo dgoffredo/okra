@@ -59,13 +59,18 @@ function table2sql(table) {
         keyClauses.push(`primary key (${quoteName(table.primaryKey)})`);
     }
 
-    // TODO: foreign key clauses
+    keyClauses.push(...table.columns
+        .filter(column => 'foreignKey' in column)
+        .map(column2foreignKeyTableClause));
 
     const indexClauses = (table.indices || []).map(index2tableClause);
 
     const tableClauses = [...columnClauses, ...keyClauses, ...indexClauses];
 
-    const tableOptions = ['engine = InnoDB'];
+    const tableOptions = [
+        'engine = InnoDB',
+        'character set utf8mb4'
+    ];
     if ('description' in table) {
         tableOptions.push(`comment = ${quoteString(table.description)}`);
     }
@@ -73,6 +78,20 @@ function table2sql(table) {
     return `create table ${quoteName(table.name)}(
     ${tableClauses.join(",\n    ")})
 ${tableOptions.join('\n')}`;
+}
+
+// TODO
+function column2foreignKeyTableClause(column) {
+    if (!('foreignKey' in column)) {
+        throw Error(`column passed to column2foreignKeyTableClause must ` +
+            `have a foreignKey property`);
+    }
+
+    const keyColumn = quoteName(column.name);
+    const foreignTable = quoteName(column.foreignKey.table);
+    const foreignColumn = quoteName(column.foreignKey.column);
+
+    return `foreign key (${keyColumn}) references ${foreignTable}(${foreignColumn})`;
 }
 
 // TODO
