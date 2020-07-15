@@ -33,11 +33,20 @@ function topologicallySortedTables(tables) {
 
 // Return a SQL literal from the specified `value`.
 function value2sql(value) {
+    if (Array.isArray(value)) {
+        return `(${value.map(value2sql).join(', ')})`;
+    }
     if (typeof value === 'string') {
         return quoteString(value);
     }
+    if (typeof value === 'number') {
+        return value.toString();
+    }
+    if (value === null) {
+        return 'null';
+    }
 
-    return JSON.stringify(value); // handles null correctly
+    throw Error(`cannot convert value ${value} of type ${typeof value} to a SQL literal`);
 }
 
 // Return a string containing MySQL 5.6 SQL statements that migrate a database
@@ -137,7 +146,7 @@ where ${keyColumnName} = ${keyValue}`;
 function insertRows(table, rows) {
     const tableName = quoteName(table.name);
     const columns = table.columns.map(column => quoteName(column.name));
-    const values = rows.map(row => `(${row.map(value2sql).join(', ')})`);
+    const values = rows.map(value2sql);
 
     return `insert into ${tableName} (${columns.join(', ')}) values
 ${values.join(',\n')}`;

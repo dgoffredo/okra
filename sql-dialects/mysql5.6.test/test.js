@@ -21,12 +21,17 @@ const tables = types2tables(types).tables;
 const newTables = JSON.parse(JSON.stringify(tables));
 
 newTables.hotdog.rows[1][2] = 'FUCK';
+newTables.grill.columns[0].description = 'changed';
 newTables.grill.columns.push({
     name: 'newbie',
     type: 'TYPE_STRING',
     nullable: true, // TODO: enforce (do I already?)
     description: "BOOM I added a column!"
 });
+newTables.grill.rows = [
+    [1337, 'boom'],
+    [42, null]
+];
 
 const sql = dbdiff2sql(dbdiff(tables, newTables));
 
