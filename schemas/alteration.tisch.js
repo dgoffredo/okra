@@ -7,9 +7,14 @@ define(['./builtin.tisch.js'], function (builtin) {
             // There are two modifications that can be made to an existing column:
             // - change to type, e.g. to widen an integer
             // - change the documentation
+            //
+            // However, all of the following properties must have values,
+            // because `MODIFY COLUMN' rewrites the entire column specification
+            // (i.e. there's no way to say "change just the nullability).
             'name': String,
-            'type?': builtin,
-            'description?': String // e.g. COMMENT section in MySQL
+            'type': builtin,
+            'nullable': Boolean,
+            'description': String // e.g. COMMENT section in MySQL
         },
         {
             'kind': 'appendColumn',

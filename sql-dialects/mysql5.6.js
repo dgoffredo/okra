@@ -1,4 +1,4 @@
-// TODO
+// TODO: document
 
 define(['../schemas/schemas'], function (schemas) {
 'use strict';
@@ -11,8 +11,6 @@ function topologicallySortedTables(tables) {
     const visited = {}; // {<table name>: Boolean}
     
     // Use a post-order depth-first traversal.
-    // Don't bother checking for cycles, but do keep track of already-visited
-    // tables in order to avoid duplicated work.
     function visit(table) {
         if (visited[table.name]) {
             return; // already seen it
@@ -33,6 +31,15 @@ function topologicallySortedTables(tables) {
     return result;
 }
 
+// Return a SQL literal from the specified `value`.
+function value2sql(value) {
+    if (typeof value === 'string') {
+        return quoteString(value);
+    }
+
+    return JSON.stringify(value); // handles null correctly
+}
+
 // Return a string containing MySQL 5.6 SQL statements that migrate a database
 // in the manner described by the specified `dbdiff`. `dbdiff` satisfies the
 // `dbdiff.tisch.js` schema.
@@ -40,18 +47,105 @@ function dbdiff2sql(dbdiff) {
     // keep 'em honest
     schemas.dbdiff.enforce(dbdiff);
 
-    const createTables = topologicallySortedTables(dbdiff.newTables)
-        .map(table2sql)
-        .map(statement => statement + ';\n\n')
-        .join('');
+    // Order of statements returned:
+    // - create new tables
+    // - alter existing tables
+    // - update existing rows
+    // - insert new rows
+    //
+    // I use this order, rather than everything-per-table, so that the DDL
+    // statements are together at the top, and the DML statements are together
+    // at the bottom.
 
-    // TODO: do other stuff, too
-    return createTables;
+    const creates = topologicallySortedTables(dbdiff.newTables)
+        .map(createTable);
+
+    // Return an array of just the part of `dbdiff.modifications` indicated,
+    // one element for each table. Exclude tables where `what` is empty.
+    function justThe(what) {
+        return Object.entries(dbdiff.modifications)
+            .map(([tableName, modifications]) => [tableName, modifications[what]])
+            .filter(([_, whats]) => whats.length);
+    }
+
+    const alterations = justThe('alterations')
+        .map(([tableName, alterations]) => alterTable(tableName, alterations));
+
+    const updates = justThe('updates')
+        .map(([tableName, updates]) =>
+            updates.map(update =>
+                updateRow(dbdiff.allTables[tableName], update)))
+        .flat(); // Each row updated gets its own statement.
+
+    const inserts = justThe('insertions')
+        .map(([tableName, rows]) =>
+            insertRows(dbdiff.allTables[tableName], rows));
+
+    return [...creates, ...alterations, ...updates, ...inserts]
+        .map(statement => statement + ';\n')
+        .join('\n');
+}
+
+// Return a string containing a MySQL 5.6 `ALTER TABLE` statement
+function alterTable(name, alterations) {
+    // Loop through `alterations` a bunch of times, collecting a different part
+    // of the `ALTER TABLE` statement each time.
+
+    // There will be at most one comment change, but allow multiple.
+    const commentChanges = alterations
+       .filter(alt => alt.kind === 'alterDescription')
+       .map(alt => `comment = ${quoteString(alt.description)}`);
+
+    const modifyColumns = alterations
+        .filter(alt => alt.kind === 'alterColumn')
+        .map(({kind, ...column}) => 
+            'modify column ' + column2tableClause(column));
+
+    const addColumns = alterations
+        .filter(alt => alt.kind === 'appendColumn')
+        .map(({kind, ...column}) => 
+            'add column ' + column2tableClause(column));
+
+    // Foreign keys happen as part of "appendColumn," but require a separate
+    // SQL clause, so we do them separately here.
+    const foreignKeys = alterations
+        .filter(alt => alt.kind === 'appendColumn' && alt.foreignKey)
+        .map(({kind, ...column}) =>
+            'add ' + column2foreignKeyTableClause(column));
+
+    const clauses = [
+        ...commentChanges, ...modifyColumns, ...addColumns, ...foreignKeys
+    ];
+
+    return `alter table ${quoteName(name)}
+${clauses.join(',\n')}`;
+}
+
+function updateRow(table, update) {
+    const tableName = quoteName(table.name);
+    // Tables whose rows we update will have a primary key.
+    const keyColumnName = quoteName(table.primaryKey);
+    const keyValue = value2sql(update.primaryKeyValue);
+    const edits = Object.entries(update.columnValues).map(
+        ([column, value]) => `set ${quoteName(column)} = ${value2sql(value)}`);
+
+    return `update ${tableName}
+${edits.join(' ')}
+where ${keyColumnName} = ${keyValue}`;
+}
+
+function insertRows(table, rows) {
+    const tableName = quoteName(table.name);
+    const columns = table.columns.map(column => quoteName(column.name));
+    const values = rows.map(row => `(${row.map(value2sql).join(', ')})`);
+
+    return `insert into ${tableName} (${columns.join(', ')}) values
+${values.join(',\n')}`;
 }
 
 // Return a string containing a MySQL 5.6 `CREATE TABLE` statement that creates
 // the specified `table`, where `table` satisfies the `table.tisch.js` schema.
-function table2sql(table) {
+function createTable(table) {
     const columnClauses = table.columns.map(column2tableClause);
 
     const keyClauses = [];
@@ -80,7 +174,7 @@ function table2sql(table) {
 ${tableOptions.join('\n')}`;
 }
 
-// TODO
+// e.g. "foreign key (faith) references religion(id)"
 function column2foreignKeyTableClause(column) {
     if (!('foreignKey' in column)) {
         throw Error(`column passed to column2foreignKeyTableClause must ` +
@@ -94,7 +188,7 @@ function column2foreignKeyTableClause(column) {
     return `foreign key (${keyColumn}) references ${foreignTable}(${foreignColumn})`;
 }
 
-// TODO
+// e.g. "foo varchar(255) not null comment 'this is the foo'"
 function column2tableClause(column) {
     const parts = [
         quoteName(column.name),
@@ -139,7 +233,7 @@ function type2sql(type) {
     }[type];
 }
 
-// TODO
+// e.g. "index (parent_id, child_id)"
 function index2tableClause(index) {
    return `index (${index.columns.map(quoteName).join(', ')})`;
 }
