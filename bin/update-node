@@ -1,0 +1,30 @@
+#!/bin/sh
+
+# Bail on error.
+set -e
+
+# `nvm` is the Node Version Manager. Install it and use it to get a recent
+# version of `node`.
+
+# Install dependencies of `nvm`.
+sudo apt update
+sudo apt install -y build-essential checkinstall libssl-dev
+
+# Ye Olde installation method
+curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.35.1/install.sh | bash
+
+# Make `nvm` accessible in this shell (the calling shell will not be updated),
+# and then install a recent `node` using `nvm`.
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+# Get a list node versions available for install, and extract the latest LTS
+# version
+latest_lts=$(nvm ls-remote --lts | \
+             grep 'Latest LTS' | \
+             sed 's/.*v\([0-9]\+\(\.[0-9]\+\)*\).*/\1/' | \
+             tail -1)
+
+nvm install "$latest_lts"
+
