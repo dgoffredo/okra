@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package foobar;
+
+// Grill is where we put the food. It's hot and smells great.
+message Grill {
+    int64 id = 1; // account number of owner
+    repeated Hotdog hotdogs = 2;
+}
+
+enum Hotdog {
+    UNSET = 0;
+    // Kosher
+    BEEF = 1;
+    TURKEY = 3; // be careful not to overcook
+}
+

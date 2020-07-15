@@ -65,6 +65,9 @@ function dbdiff2sql(dbdiff) {
     // I use this order, rather than everything-per-table, so that the DDL
     // statements are together at the top, and the DML statements are together
     // at the bottom.
+    //
+    // Note that rows must be added table-by-table in topological order, so
+    // that foreign keys are satisfied.
 
     const creates = topologicallySortedTables(dbdiff.newTables)
         .map(createTable);
@@ -86,7 +89,24 @@ function dbdiff2sql(dbdiff) {
                 updateRow(dbdiff.allTables[tableName], update)))
         .flat(); // Each row updated gets its own statement.
 
-    const inserts = justThe('insertions')
+    const newTablesWithRows = Object.entries(dbdiff.newTables)
+        .filter(([name, table]) => (table.rows || []).length)
+        .map(([name, table]) => [name, table.rows]);
+
+    const toInsert = Object.fromEntries(
+        [...justThe('insertions'), ...newTablesWithRows]);
+
+    // Sort the to-insert-into tables topologically, and then use that ordering
+    // to get an ordered version of `toInsert`.
+    const tablesInsertedInto = topologicallySortedTables(
+        Object.fromEntries(
+            Object.entries(toInsert)
+            .map(([name, rows]) => [name, dbdiff.allTables[name]])));
+
+    const toInsertSorted = tablesInsertedInto
+        .map(table => [table.name, toInsert[table.name]]);
+
+    const inserts = toInsertSorted
         .map(([tableName, rows]) =>
             insertRows(dbdiff.allTables[tableName], rows));
 
@@ -113,7 +133,7 @@ function alterTable(name, alterations) {
     const addColumns = alterations
         .filter(alt => alt.kind === 'appendColumn')
         .map(({kind, ...column}) => 
-            'add column ' + column2tableClause(column));
+            'add column ' + column2tableClause({nullable: true, ...column}));
 
     // Foreign keys happen as part of "appendColumn," but require a separate
     // SQL clause, so we do them separately here.

@@ -13,26 +13,25 @@ const {dbdiff} = require('../../lib/dbdiff');
 const {dbdiff2sql} = require('../mysql5.6');
 
 const types = proto2types({
-    protoFiles: [__dirname + '/../../lib/proto2types.test/enum-array-field.proto']
-    // protoFiles: [__dirname + '/../../lib/proto2types.test/id-field.proto']
+    protoFiles: [__dirname + '/enum-array-field.proto']
 });
-
 const tables = types2tables(types).tables;
-const newTables = JSON.parse(JSON.stringify(tables));
 
-newTables.hotdog.rows[1][2] = 'FUCK';
-newTables.grill.columns[0].description = 'changed';
-newTables.grill.columns.push({
-    name: 'newbie',
-    type: 'TYPE_STRING',
-    nullable: true, // TODO: enforce (do I already?)
-    description: "BOOM I added a column!"
+const newTypes = proto2types({
+    protoFiles: [__dirname + '/enum-array-field-2.proto']
 });
-newTables.grill.rows = [
-    [1337, 'boom'],
-    [42, null]
-];
+const newTables = types2tables(newTypes).tables;
 
-const sql = dbdiff2sql(dbdiff(tables, newTables));
+let sql;
+
+if (true) {
+    sql = dbdiff2sql({
+        allTables: tables,
+        newTables: tables,
+        modifications: {}
+    });
+} else {
+    sql = dbdiff2sql(dbdiff(tables, newTables));
+}
 
 console.log(sql);
