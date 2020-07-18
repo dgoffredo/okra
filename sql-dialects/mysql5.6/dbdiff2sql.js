@@ -65,9 +65,6 @@ function dbdiff2sql(dbdiff) {
     // I use this order, rather than everything-per-table, so that the DDL
     // statements are together at the top, and the DML statements are together
     // at the bottom.
-    //
-    // Note that rows must be added table-by-table in topological order, so
-    // that foreign keys are satisfied.
 
     const creates = topologicallySortedTables(dbdiff.newTables)
         .map(createTable);
@@ -89,24 +86,18 @@ function dbdiff2sql(dbdiff) {
                 updateRow(dbdiff.allTables[tableName], update)))
         .flat(); // Each row updated gets its own statement.
 
+    // `INSERT` comes from two places: "insertions" and "newTables" with
+    // nonempty ".rows". Here is the latter, which is combined with the former
+    // below.
     const newTablesWithRows = Object.entries(dbdiff.newTables)
         .filter(([name, table]) => (table.rows || []).length)
         .map(([name, table]) => [name, table.rows]);
 
-    const toInsert = Object.fromEntries(
-        [...justThe('insertions'), ...newTablesWithRows]);
-
-    // Sort the to-insert-into tables topologically, and then use that ordering
-    // to get an ordered version of `toInsert`.
-    const tablesInsertedInto = topologicallySortedTables(
-        Object.fromEntries(
-            Object.entries(toInsert)
-            .map(([name, rows]) => [name, dbdiff.allTables[name]])));
-
-    const toInsertSorted = tablesInsertedInto
-        .map(table => [table.name, toInsert[table.name]]);
-
-    const inserts = toInsertSorted
+    // This looks a tiny bit silly because we went from tables to table names
+    // in `newTablesWithRows`, and now we're going back to tables, but that's
+    // because `justThe` uses table names, so to keep things uniform here I
+    // look up the tables by name in `allTables` again for the whole lot.
+    const inserts = [...justThe('insertions'), ...newTablesWithRows]
         .map(([tableName, rows]) =>
             insertRows(dbdiff.allTables[tableName], rows));
 
