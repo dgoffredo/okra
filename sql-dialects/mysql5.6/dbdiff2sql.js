@@ -1,6 +1,6 @@
 // TODO: document
 
-define(['../schemas/schemas'], function (schemas) {
+define(['../../schemas/schemas'], function (schemas) {
 'use strict';
 
 // `{<table name>: table}` -> `[table, ...]` such that a table comes before any

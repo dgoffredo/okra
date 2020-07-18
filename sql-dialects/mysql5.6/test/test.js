@@ -4,13 +4,16 @@
 
 // TODO: scratch scratch
 
-// Patch node's "require" system to allow for "define"-based modules.
-require('../../dependencies/node-amd-loader/amd-loader');
+// I'M SO TIRED OF WRITING THIS TESTING BOILERPLATE SCREW IT
+// DOOT DOOT!
 
-const {proto2types} = require('../../lib/proto2types');
-const {types2tables} = require('../../lib/types2tables');
-const {dbdiff} = require('../../lib/dbdiff');
-const {dbdiff2sql} = require('../mysql5.6');
+// Patch node's "require" system to allow for "define"-based modules.
+require('../../../dependencies/node-amd-loader/amd-loader');
+
+const {proto2types} = require('../../../lib/proto2types');
+const {types2tables} = require('../../../lib/types2tables');
+const {dbdiff} = require('../../../lib/dbdiff');
+const {dbdiff2sql} = require('../dbdiff2sql');
 
 const types = proto2types({
     protoFiles: [__dirname + '/enum-array-field.proto']
