@@ -14,11 +14,27 @@ const {proto2types} = require('../../../lib/proto2types');
 const {types2tables} = require('../../../lib/types2tables');
 const {dbdiff} = require('../../../lib/dbdiff');
 const {dbdiff2sql} = require('../dbdiff2sql');
+const {types2crud} = require('../types2crud'); // TODO
 
 const types = proto2types({
     protoFiles: [__dirname + '/enum-array-field.proto']
 });
-const tables = types2tables(types).tables;
+const {tables, legends} = types2tables(types);
+
+function pretty(value) {
+    return JSON.stringify(value, undefined, 4);
+}
+
+// TODO: hack hack
+console.log(
+    pretty(
+        types2crud(
+            Object.fromEntries(
+                types.map(type => [
+                    type.name,
+                    // ugh
+                    {type, ...(type.name in legends? {legend: legends[type.name]} : {})}
+                ])))));
 
 const newTypes = proto2types({
     protoFiles: [__dirname + '/enum-array-field-2.proto']

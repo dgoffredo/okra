@@ -17,8 +17,9 @@ database together with functions for marshaling objects into and out of the
 database in some programming language.
 
 It doesn't support messages-in-messages, or anything cool. It just maps
-mostly-flat protobuf messages into mostly-flat SQL tables. The one cool
-thing that it supports is arrays of basic types or enum types.
+mostly-flat protobuf messages into mostly-flat SQL tables. The two cool
+things that it supports are enum types and arrays of basic types or of enum
+types.
 
 How
 ---

@@ -19,12 +19,11 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
-# Get a list node versions available for install, and extract the latest LTS
-# version
+# Get a list of node versions available for install, and extract the latest
+# long term support (LTS) version.
 latest_lts=$(nvm ls-remote --lts | \
              grep 'Latest LTS' | \
              sed 's/.*v\([0-9]\+\(\.[0-9]\+\)*\).*/\1/' | \
              tail -1)
 
 nvm install "$latest_lts"
-

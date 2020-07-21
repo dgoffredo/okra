@@ -4,60 +4,143 @@
 //
 // Each procedure is composed of a sequence of operations for executing SQL
 // statements and unpacking the results into protocol buffer objects.
-//
-// This schema describes an operation.
-//
-or(
-    // Read-only SQL query. The `parameters` are input parameters.
-    {
-        'operation': 'query',
-        'sql': String,
-        'parameters': [String, ...etc] // protobuf field names
-    },
-
-    // Extract column values from the current result row, and advance to the
-    // next row.
-    {
-        'operation': 'read-row',
-        'destinations': [String, ...etc] // protobuf field names
-    },
-
-    // Extract the first column of all remaining rows, and append each value
-    // to the array-valued `destination`.
-    {
-        'operation': 'read-array',
-        'destination': String // protobuf field name
-    },
-
-    // Read/write SQL query. Not expected to produce any rows. The
-    // `parameters` are input parameters.
-    {
-        'operation': 'exec',
-        'sql': String,
-        'parameters': [String, ...etc] // protobuf field names
-    },
-
-    // Read/write SQL query. Not expected to produce any rows.
+(function () {
+    // A `parameter` refers to a field in a protobuf message, or refers to
+    // whether that field is included in the current operation (sometimes
+    // we're only interested in a subset of the message's fields).
     //
-    // This operation was designed for the case where you are inserting
-    // multiple rows into a table, e.g. to update an array-valued field. Such
-    // a SQL statement will look something like:
+    // For example, a SQL dialect might emit the following query for the "read"
+    // operation of a "Person" type:
     //
-    //     insert into boyscout_badges(boyscout_id, badge_id)
-    //     values (?, ?), (?, ?), (?, ?), (?, ?), ...
+    //     select
+    //       id as id,
+    //       case when ? then name else null end as name,
+    //       case when ? then age else null end as age
+    //     from person
+    //     where id = ?;
     //
-    // where there's one "(?, ?)" per row, i.e. per value in the array-valued
-    // field. In an `exec-with-tuples` operation for the example above, the
-    // `tuple` is "(?, ?)" and the `sql` is everything before the first "(?,
-    // ?)". Exactly one of the `parameters` will be array-valued, and its
-    // length determines the number of copies of `tuple`. Other parameters are
-    // to be repeated for each element in the array-valued parameter (e.g. the
-    // `boyscout_id` is always the same, while the `badge_id` varies with the
-    // values in the array-valued parameter).
-    {
-        'operation': 'exec-with-tuples',
-        'tuple': String,
-        'sql': String,
-        'parameters': [String, ...etc] // protobuf field names
-    }
-)
+    // The parameters for that operations would be:
+    //
+    //     [
+    //         {"included": "name"},
+    //         {"included": "age"},
+    //         {"field": "id"}
+    //     ]
+    //
+    // Note that excluded fields will still be referenced as output parameters
+    // in "read-row" and "read-array" operations. It's up to the generated CRUD
+    // code (e.g. Go, C++) to ignore output parameters of excluded fields.
+    //
+    // For example, a SQL dialect might emit the following "read-row" operation
+    // after the previous query:
+    //
+    //     {
+    //         "operation": "read-row",
+    //         "destinations": [
+    //             {"field": "id"},
+    //             {"field": "name"},
+    //             {"field": "age"}
+    //         ]
+    //     }
+    //
+    // If "age" is excluded from the "read" operation, then the generated code
+    // has to know not the write a value into the "age" property, even though
+    // "read-row" says to do so.
+    const inputParameter = or(
+        // protobuf field name as is appears in the `.proto` file
+        {'field': String},
+
+        // whether the field with the specified name is part of the operation.
+        // A "read" operation might specify only a subset of fields to return,
+        // and an "update" operation might specify only a subset of fields to
+        // modify.
+        {'included': String}
+    );
+
+    // Field name of the destination field.
+    const outputParameter = {'field': String};
+
+    const operation = or(
+        // Read-only SQL query.
+        {
+            'operation': 'query',
+            'sql': String,
+            'parameters': [inputParameter, ...etc]
+        },
+    
+        // Extract column values from the current result row, and advance to the
+        // next row. If an excluded field is among the `destinations`, ignore
+        // that field.
+        {
+            'operation': 'read-row',
+            'destinations': [outputParameter, ...etc]
+        },
+    
+        // Extract the first column of all remaining rows, and append each value
+        // to the array-valued `destination`. If the field `destination` is not
+        // selected, then ignore this operation.
+        {
+            'operation': 'read-array',
+            'destination': outputParameter
+        },
+    
+        // Read/write SQL query. Not expected to produce any rows.
+        {
+            'operation': 'exec',
+            // Some statements are to be executed conditionally based on the
+            // inclusion of a message field. For example, an "update" that
+            // includes an array field will delete rows from the corresponding
+            // array table and replace them with new values. However, if the
+            // array field is not included, then the statement must not be
+            // executed.
+            'condition?': {'included': String},
+            'sql': String,
+            'parameters': [inputParameter, ...etc]
+        },
+    
+        // Read/write SQL query. Not expected to produce any rows.
+        //
+        // This operation was designed for the case where you are inserting
+        // multiple rows into a table, e.g. to update an array-valued field. Such
+        // a SQL statement will look something like:
+        //
+        //     insert into boyscout_badges(boyscout_id, badge_id)
+        //     values (?, ?), (?, ?), (?, ?), (?, ?), ...
+        //
+        // where there's one "(?, ?)" per row, i.e. per value in the array-valued
+        // field. In an `exec-with-tuples` operation for the example above, the
+        // `tuple` is "(?, ?)" and the `sql` is everything before the first "(?,
+        // ?)". Exactly one of the `parameters` will be array-valued, and its
+        // length determines the number of copies of `tuple`. Other parameters are
+        // to be repeated for each element in the array-valued parameter (e.g. the
+        // `boyscout_id` is always the same, while the `badge_id` varies with the
+        // values in the array-valued parameter).
+        {
+            'operation': 'exec-with-tuples',
+            // Some statements are to be executed conditionally based on the
+            // inclusion of a message field. For example, an "update" that
+            // includes an array field will delete rows from the corresponding
+            // array table and replace them with new values. However, if the
+            // array field is not included, then the statement must not be
+            // executed.
+            'condition?': {'included': String},
+            'tuple': String,
+            'sql': String,
+            // I imagine that `parameters` will only ever contain
+            // `{field: ...}` parameters, not `{included: ...}` parameters, but
+            // still both are allowed.
+            'parameters': [inputParameter, ...etc]
+        });
+
+    return {
+        // Each property is the name of the message type whose CRUD operations
+        // it describes. Enum types do not have CRUD operations.
+        [Any]: {
+            'create': [operation, ...etc],
+            'read': [operation, ...etc],
+            'update': [operation, ...etc],
+            'delete': [operation, ...etc]
+        },
+        ...etc
+    };
+}())

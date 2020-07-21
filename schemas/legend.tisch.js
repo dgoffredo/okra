@@ -18,10 +18,10 @@
     }, {
         // Each array field has a table that maps the message type table's ID
         // to one of the values of the field, e.g. "Shoe.parts" will have a
-        // "shoe_parts" table with two columns: "shoe_id" and "value" (or maybe
-        // "part_id" if part is an enum).
+        // "shoe_parts" table with two columns: "id" and "value". "id" refers
+        // to the primary key of the message table, and "value" is the value,
+        // which may have a foreign key to an enum table it it's an enum.
         fieldName: String, // name of the array-valued field, e.g. "parts"
-        tableName: String, // the mapping table, e.g. "shoe_parts"
-        columnName: String // value column in the mapping table, e.g. "value"
+        tableName: String // the mapping table, e.g. "shoe_parts"
     }), ...etc]
 })
