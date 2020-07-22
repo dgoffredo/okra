@@ -3,7 +3,7 @@
 define(['../../schemas/schemas'], function (schemas) {
 'use strict';
 
-// `{<table name>: table}` -> `[table, ...]` such that a table comes before any
+// `{<table name>: table}` → `[table, ...]` such that a table comes before any
 // tables that reference it in a foreign key, i.e. you can execute `CREATE
 // TABLE` statements in that order.
 function topologicallySortedTables(tables) {

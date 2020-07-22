@@ -1,7 +1,7 @@
 // This module exports a function, `types2crud`, that produces a description
 // of create-read-update-delete (CRUD) operations for a given set of types and
-// their legends. The SQL statements used in the CRUD are compatible with
-// MySQL 5.6.
+// their legends. The SQL statements used in the CRUD operations are
+// compatible with MySQL 5.6.
 
 define(['../../schemas/schemas', '../../dependencies/tisch/tisch', './common'],
 function (schemas, tisch, common) {
@@ -20,7 +20,7 @@ function combinePatterns(...regexes) {
 
 // Return a modified version of the specified `sqlText` that has had
 // unnecessary whitespace removed. This allows SQL template strings to be
-// formatted however is convenient in the code, and then reduced to something
+// formatted however is convenient in this code, and then reduced to something
 // consistent for output.
 const sqline = (function () {
     const regex = combinePatterns(
@@ -36,16 +36,77 @@ const sqline = (function () {
     return sqlText => sqlText.replace(regex, dedupeWhitespace).trim();
 }());
 
+// In a simpler world, selecting the value from a column would always look like:
+//
+//     select `foo` from ...
+//
+// and the SQL driver would marshal the value into the corresponding type in
+// the generated Go/Python/C++/etc. code. However, SQL drivers (and the
+// libraries that wrap them) differ in how they handle certain types. For
+// example, in one Go MySQL driver, a "parseTime" parameter must be specified
+// in the database connection string in order for datetime values to be
+// handled in terms of Go's `time.Time` type. Otherwise they're handled as
+// strings.
+//
+// Also in an ideal world, references to parameters would always look like:
+//
+//     insert into foo(bar, baz) values(?, ?);
+//
+// For the same reason, though, the form of the parameter might differ between
+// drivers, e.g. it might have to be:
+//
+//     insert into foo(bar, baz) values(?, from_unixtime(?));
+//
+// Because of this, we customize how columns are selected ("selector") and how
+// parameters are referenced ("parameter") based on the type of the relevant
+// protobuf field. Okra picks a convention for the representation of certain
+// types, so that Go/Python/C++/etc. code generators can target that
+// representation regardless of which particular database driver library they
+// use.
+//
+// As of this writing, only the time-related type is treated specially.
+function selector({columnName, fieldType}) {
+    if (fieldType.builtin === '.google.protobuf.Timestamp') {
+        // timestamp(6) → unix timestamp in microseconds
+        return `unix_timestamp(${quoteName(columnName)}) * 1000000`;
+    }
+    else {
+        return quoteName(columnName);
+    }
+}
+
+// `fieldType` has the shape of the "type" of a "field" in a message type. See
+// `type.tisch.js`.
+function parameter(fieldType) {
+    if (fieldType.builtin === '.google.protobuf.Timestamp') {
+        // unix timestamp in microseconds → timestamp(6) compatible string
+        // The intermediate cast to `decimal(20, 6)` ensures that there is
+        // enough precision.
+        return 'from_unixtime(cast(? / 1000000.0 as decimal(20, 6)))'
+    }
+    else {
+        return '?';
+    }
+}
+
 // Return a CRUD operation for adding values into the specified
 // `arrayTableName` from the specified `arrayField` of the message type having
-// the specified `messageIdField`. The returned operation will require that
-// `arrayField` is included (if `arrayField` is not included, a code generator
-// will not perform the operation).
-function operationInsertArray({arrayTableName, messageIdField, arrayField}) {
+// the specified `messageIdField`, where the `messageIdField` has the
+// specified `messageIdFieldType` and the elements of the array field have the
+// specified `arrayFieldType`. The returned operation will require that
+// `arrayField` is included in the operation (if `arrayField` is not included,
+// a code generator will not perform the operation).
+function operationInsertArray({
+    arrayTableName,
+    messageIdField,
+    messageIdFieldType,
+    arrayField,
+    arrayFieldType
+}) {
     return {
         operation: 'exec-with-tuples',
         condition: {included: arrayField},
-        tuple: '(?, ?)',
+        tuple: `(${parameter(messageIdFieldType)}, ${parameter(arrayFieldType)})`,
         sql: sqline(`insert into
             ${quoteName(arrayTableName)}(
                 ${quoteName('id')}, ${quoteName('value')})
@@ -58,9 +119,15 @@ function operationInsertArray({arrayTableName, messageIdField, arrayField}) {
 }
 
 // Return a CRUD operation for selecting rows from the specified
-// `arrayTableName` for the message type having the specified
-// `messageIdField`.
-function operationSelectArray({arrayTableName, messageIdField}) {
+// `arrayTableName` representing an array of the specified `arrayType` in the
+// message type having the specified `messageIdField` with the specified
+// `messageIdFieldType`.
+function operationSelectArray({
+    arrayTableName,
+    arrayType, // type of the array itself, e.g. `{array: ...}`
+    messageIdField,
+    messageIdFieldType
+}) {
     return {
         operation: 'query',
 
@@ -68,9 +135,9 @@ function operationSelectArray({arrayTableName, messageIdField}) {
         // very least, the `value` column has to be the first column selected,
         // so that the generated code then knows which column in the result set
         // to use as a value in the array field.
-        sql: sqline(`select ${quoteName('value')}
+        sql: sqline(`select ${selector({columnName: 'value', fieldType: arrayType.array})}
                 from ${quoteName(arrayTableName)}
-                where ${quoteName('id')} = ?;`),
+                where ${quoteName('id')} = ${parameter(messageIdFieldType)};`),
         parameters: [
             {field: messageIdField}
         ]
@@ -78,17 +145,23 @@ function operationSelectArray({arrayTableName, messageIdField}) {
 }
 
 // Return a CRUD operation that deletes all rows from the specified
-// `arrayTableName` whose message ID column ("id") has the same value as the
-// specified `messageIdField` (`messageIdField` is the _name_ of the field
-// whose value we're interested in). Optionally specify a `conditionField`,
-// which makes the returned operation applicable only if that field is included
-// in the relevant operation (e.g. deleting values before replacing them in an
-// "update," but only if we're updating that field).
-function operationDeleteArray({arrayTableName, messageIdField, conditionField}) {
+// `arrayTableName` whose message ID column ("id") of the specified type
+// `messageIdFieldType` has the same value as the specified `messageIdField`
+// (`messageIdField` is the _name_ of the field whose value we're interested
+// in). Optionally specify a `conditionField`, which makes the returned
+// operation applicable only if that field is included in the relevant
+// operation (e.g. deleting values before replacing them in an "update," but
+// only if we're updating that field).
+function operationDeleteArray({
+    arrayTableName,
+    messageIdField,
+    messageIdFieldType,
+    conditionField
+}) {
     return {
         operation: 'exec',
         sql: sqline(`delete from ${quoteName(arrayTableName)}
-                where ${quoteName('id')} = ?;`),
+                where ${quoteName('id')} = ${parameter(messageIdFieldType)};`),
         parameters: [
             {field: messageIdField}
         ],
@@ -105,12 +178,18 @@ function operationSelectMessage({type, legend}) {
     const keyColumnName = scalarFieldSources
         .find(({fieldName}) => fieldName === type.idFieldName)
         .columnName;
+    const fieldTypes = Object.fromEntries(
+        type.fields.map(({name, type}) => [name, type]));
+    const selectors = scalarFieldSources
+        .map(({columnName, fieldName}) =>
+            selector({columnName, fieldType: fieldTypes[fieldName]}));
+    const idFieldType = fieldTypes[type.idFieldName];
 
     return {
         operation: 'query',
-        sql: sqline(`select ${scalarFieldSources.map(({columnName}) => quoteName(columnName)).join(', ')}
+        sql: sqline(`select ${selectors.join(', ')}
             from ${quoteName(legend.tableName)}
-            where ${quoteName(keyColumnName)} = ?;`),
+            where ${quoteName(keyColumnName)} = ${parameter(idFieldType)};`),
         parameters: [
             {field: type.idFieldName}
         ]
@@ -119,16 +198,22 @@ function operationSelectMessage({type, legend}) {
 
 // Return a snippet of SQL that sets the value at the specified `columnName`
 // to either a parameterized value or to itself (a no-op) depending on a
-// parameterized boolean. This snippet is intended to be used as one of the
+// parameterized boolean. The boolean says whether to update the column. The
+// SQL snipped returned by this function is intended to be used as one of the
 // "..." in "update foo set ..., ..., ...".
-function sqlClauseUpdateColumn({columnName}) {
+function sqlClauseUpdateColumn({columnName, fieldType}) {
     const name = quoteName(columnName);
 
-    // The first "?" will be bound to a predicate answering the question of
-    // whether `columnName` should be updated. The second "?" will be bound to
-    // the new value for `columnName`, or to anything (e.g. null) if the
-    // column is not to be updated.
-    return `${name} = case when ? then ? else ${name} end`;
+    // The first parameter will be bound to a predicate answering the question
+    // of whether `columnName` should be updated. The second parameter will be
+    // bound to the new value for `columnName`, or to anything (e.g. null) if
+    // the column is not to be updated.
+    const boolParameter = parameter({builtin: 'TYPE_BOOL'});
+    const valueParameter = parameter(fieldType);
+    return `${name} = case
+        when ${boolParameter} then ${valueParameter}
+        else ${name}
+      end`;
 }
 
 // Return a CRUD operation that updates the scalar fields of an instance of
@@ -136,14 +221,20 @@ function sqlClauseUpdateColumn({columnName}) {
 // not have any updatable fields. Use the specified `legend` to map message
 // fields to table columns.
 function operationUpdateMessage({type, legend}) {
-    let {scalarFieldSources} = byMultiplicity(legend.fieldSources);
+    const {scalarFieldSources} = byMultiplicity(legend.fieldSources);
     const keyColumnName = scalarFieldSources
         .find(({fieldName}) => fieldName === type.idFieldName)
         .columnName;
+    const fieldTypes = Object.fromEntries(
+        type.fields.map(({name, type}) => [name, type]));
+    const idFieldType = fieldTypes[type.idFieldName];
 
-    // Exclude the ID field from those that we might update.
-    scalarFieldSources = scalarFieldSources
-        .filter(({fieldName}) => fieldName !== type.idFieldName);
+    // Exclude the ID field from those that we might update (we're never going
+    // to change the primary key of a row), and also add the type of each field
+    // (for use by `sqlClauseUpdateColumn`).
+    const scalarFieldInfos = scalarFieldSources
+        .filter(({fieldName}) => fieldName !== type.idFieldName)
+        .map(entry => ({...entry, fieldType: fieldTypes[entry.fieldName]}));
 
     if (scalarFieldSources.length === 0) {
         return;
@@ -152,13 +243,13 @@ function operationUpdateMessage({type, legend}) {
     return {
         operation: 'exec',
         sql: sqline(`update ${quoteName(legend.tableName)}
-            set ${scalarFieldSources.map(sqlClauseUpdateColumn).join(', ')}
-            where ${quoteName(keyColumnName)} = ?;`),
+            set ${scalarFieldInfos.map(sqlClauseUpdateColumn).join(', ')}
+            where ${quoteName(keyColumnName)} = ${parameter(idFieldType)};`),
         parameters: [
             // Each of the possibly-updated fields has two parameters: one that's a
             // boolean saying whether to update it, and another that's the new
             // value if it's to be updated.
-            ...scalarFieldSources.map(({fieldName}) => [
+            ...scalarFieldInfos.map(({fieldName}) => [
                 {included: fieldName},
                 {field: fieldName}
             ]).flat(),
@@ -201,6 +292,11 @@ function operationsCreateMessage({type, legend}) {
         arrayFieldSources
     } = byMultiplicity(legend.fieldSources);
 
+    const fieldTypes = Object.fromEntries(
+        type.fields.map(({name, type}) => [name, type]));
+    const scalarFieldInfos = scalarFieldSources
+        .map(entry => ({...entry, fieldType: fieldTypes[entry.name]}));
+
     return [
         // Insert a new row into the table of the message type, specifying
         // all non-array fields.
@@ -208,7 +304,7 @@ function operationsCreateMessage({type, legend}) {
             operation: 'exec',
             sql: sqline(`insert into ${quoteName(legend.tableName)}(
                 ${scalarFieldSources.map(({columnName}) => quoteName(columnName)).join(', ')})
-                values (${scalarFieldSources.map(() => '?').join(', ')});`),
+                values (${scalarFieldInfos.map(parameter).join(', ')});`),
             parameters: scalarFieldSources.map(({fieldName}) => ({field: fieldName}))
         },
 
@@ -217,7 +313,9 @@ function operationsCreateMessage({type, legend}) {
             operationInsertArray({
                 arrayTableName: tableName,
                 messageIdField: type.idFieldName,
-                arrayField: fieldName
+                messageIdFieldType: fieldTypes[type.idFieldName],
+                arrayField: fieldName,
+                arrayFieldType: fieldTypes[fieldName]
             }))
     ];
 }
@@ -238,6 +336,9 @@ function operationsReadMessage({type, legend}) {
         arrayFieldSources
     } = byMultiplicity(legend.fieldSources);
 
+    const fieldTypes = Object.fromEntries(
+        type.fields.map(({name, type}) => [name, type]));
+
     return [
         // Query the message table.
         operationSelectMessage({type, legend}),
@@ -257,7 +358,9 @@ function operationsReadMessage({type, legend}) {
             // select value from boyscout_badges where id = ?;
             operationSelectArray({
                 arrayTableName: tableName,
-                messageIdField: type.idFieldName
+                arrayType: fieldTypes[fieldName],
+                messageIdField: type.idFieldName,
+                messageIdFieldType: fieldTypes[type.idFieldName]
             }),
 
             // e.g.
@@ -288,6 +391,8 @@ function operationsUpdateMessage({type, legend}) {
     // (i.e. when somebody does an update, they can specify some subset of
     // message fields to be updated, rather than all of them).
     const {arrayFieldSources} = byMultiplicity(legend.fieldSources);
+    const fieldTypes = Object.fromEntries(
+        type.fields.map(({name, type}) => [name, type]));
 
     return [
         // Update the message table.
@@ -305,6 +410,7 @@ function operationsUpdateMessage({type, legend}) {
             operationDeleteArray({
                 arrayTableName: tableName,
                 messageIdField: type.idFieldName,
+                messageIdFieldType: fieldTypes[type.idFieldName],
                 conditionField: fieldName
             }),
 
@@ -313,7 +419,9 @@ function operationsUpdateMessage({type, legend}) {
             operationInsertArray({
                 arrayTableName: tableName,
                 messageIdField: type.idFieldName,
-                arrayField: fieldName
+                messageIdFieldType: fieldTypes[type.idFieldName],
+                arrayField: fieldName,
+                arrayFieldType: fieldTypes[fieldName]
             })
         ]).flat()
     ];
@@ -338,6 +446,9 @@ function operationsDeleteMessage({type, legend}) {
     const keyColumnName = scalarFieldSources
         .find(({fieldName}) => fieldName === type.idFieldName)
         .columnName;
+    const fieldTypes = Object.fromEntries(
+        type.fields.map(({name, type}) => [name, type]));
+    const idFieldType = fieldTypes[type.idFieldName];
 
     return [
         // Rows in array tables need to be deleted first, since they have
@@ -345,7 +456,8 @@ function operationsDeleteMessage({type, legend}) {
         ...arrayFieldSources.map(({tableName}) =>
             operationDeleteArray({
                 arrayTableName: tableName,
-                messageIdField: type.idFieldName
+                messageIdField: type.idFieldName,
+                messageIdFieldType: idFieldType
             })),
 
         // Once we've deleted everything that references the instance's row in
@@ -353,7 +465,7 @@ function operationsDeleteMessage({type, legend}) {
         {
             operation: 'exec',
             sql: sqline(`delete from ${quoteName(legend.tableName)}
-                where ${quoteName(keyColumnName)} = ?;`),
+                where ${quoteName(keyColumnName)} = ${parameter(idFieldType)};`),
             parameters: [
                 {field: type.idFieldName}
             ]
