@@ -1,5 +1,9 @@
-// TODO: document
-
+// This module provides a function `dbdiff2sql`, which takes a description of
+// the difference between two database schemas and returns SQL statements that
+// migrate the "from" database schema to the "to" database schema, in MySQL
+// 5.6.
+// The output of `dbdiff2sql` is what a database administrator would run to
+// reflect in the MySQL database changes made to protobuf type definitions.
 define(['../../schemas/schemas'], function (schemas) {
 'use strict';
 
