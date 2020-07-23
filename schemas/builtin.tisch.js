@@ -26,4 +26,5 @@ or('TYPE_DOUBLE',
    'TYPE_BYTES',
    // Keep these "well-known" built-ins up to date with
    // `function builtinMessage`, defined in `proto2types.js`.
-   '.google.protobuf.Timestamp')
+   '.google.protobuf.Timestamp',
+   '.google.type.Date')

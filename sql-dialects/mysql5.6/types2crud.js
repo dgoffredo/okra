@@ -70,6 +70,11 @@ function selector({columnName, fieldType}) {
         // timestamp(6) → unix timestamp in microseconds
         return `unix_timestamp(${quoteName(columnName)}) * 1000000`;
     }
+    else if (fieldType.builtin === '.google.type.Date') {
+        // date -> "YYYY-MM-DD"
+        // but this is the default for MySQL 5.6
+        return quoteName(columnName);
+    }
     else {
         return quoteName(columnName);
     }
@@ -83,6 +88,11 @@ function parameter(fieldType) {
         // The intermediate cast to `decimal(20, 6)` ensures that there is
         // enough precision.
         return 'from_unixtime(cast(? / 1000000.0 as decimal(20, 6)))'
+    }
+    else if (fieldType.builtin === '.google.type.Date') {
+        // "YYYY-MM-DD" -> date
+        // but this is the default for MySQL 5.6
+        return '?';
     }
     else {
         return '?';

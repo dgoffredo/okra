@@ -249,6 +249,7 @@ function type2sql(type) {
         'TYPE_STRING': 'longtext',
         'TYPE_BYTES': 'longblob',
         '.google.protobuf.Timestamp': 'timestamp(6)',
+        '.google.type.Date': 'date',
         'name': 'varchar(255)'
     }[type];
 }
