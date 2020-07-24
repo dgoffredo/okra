@@ -34,13 +34,29 @@ More
 - protoc (the protocol buffer compiler and its Python libraries)
 - Python 3
 
+### Installing Dependencies on a Debian-based Linux
+[bin/update-node](bin/update-node) installs [nvm][1], the Node Version
+Manager, and uses it to install the most recent long term support (LTS)
+version of node, which is v12 or greater.
+
+The protocol buffer compiler, Python 3, and the Python 3 bindings to the
+protocol buffer compiler can be installed using `apt`:
+```console
+$ sudo apt install -y protobuf-compiler python3 python3-protobuf
+```
+
 ### A Tour of the Code
 
 #### `crud-languages/`
-TODO
+[crud-languages](crud-languages) contains TODO
 
 #### `sql-dialects/`
-TODO
+[sql-dialects](sql-dialects) contains TODO
+
+#### `lib/`
+[lib](lib) contains TODO
 
 #### `schemas/`
-TODO
+[schemas](schemas) contains TODO
+
+[1]: https://github.com/nvm-sh/nvm

@@ -2,13 +2,19 @@ digraph {
     bgcolor="transparent"
     rankdir=LR // left-to-right
 
+    // Internal nodes are ellipses. The .proto schema is an input, so the node
+    // is a box.
+    ".proto schema" [shape=box]
+
     ".proto schema" -> "okra types"
+    ".proto schema" -> "proto options"
     "okra types" -> "okra tables"
     "okra types" -> "okra legends"
     "okra tables" -> "okra CRUD"
     "okra legends" -> "okra CRUD"
 
-    // The SQL tables are an output, so the node is a box.
+    // Internal nodes are ellipses. The SQL tables are an output, so the node
+    // is a box.
     "MySQL/SQLite/etc. tables" [shape=box]
 
     "okra tables" -> "MySQL/SQLite/etc. tables"
@@ -18,4 +24,5 @@ digraph {
 
     "okra CRUD" -> "Go/Python/etc. package"
     "okra types" -> "Go/Python/etc. package"
+    "proto options" -> "Go/Python/etc. package"
 }
