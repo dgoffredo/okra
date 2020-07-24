@@ -3,29 +3,71 @@
 // enough information to make rendering Go code for Okra neater than a rat's
 // nest of template strings.
 (function () {
-    const statement = or(
-        {'raw': String}, // any code at all
+    const expression = recursive(({expression}) => or(
+        // any code at all, expanded verbatim into the .go file
+        {'raw': String},
+
+        // 34.54, -11, 3.454e-23
+        Number,
+
+        // "\"quoted\" as JSON, which is compatible with Go string literals"
+        // That is, the generator will do the quoting. The `String` expression
+        // does not have to be JSON serialized to begin with.
+        String,
+
+        // rendered as nil
+        null,
+
+        // e.g. the name of a variable
+        {'symbol': String},
+
+        // $function($arguments)
+        {'call': {
+            'function': String, // name of the function to call
+            'arguments': [expression, ...etc]
+        }},
+
+        // $type{$elements}
+        // or
+        // {$elements}
+        {'slice': {
+            'type?': String, // name of the slice type
+            'elements': [expression, ...etc]
+        }},
+
+        // e.g. if we have [$a, $b, $c], then
+        // $a.$b.$c
+        {'.': [expression, ...etc]}));
+
+    const statement = recursive(({statement}) => or(
+        // see `expression`, defined above
+        expression,
+
+        // $left = $right
         {'assignment': {
             'left': [String, ...etc], // variable names
-            'right': String // any expression
+            'right': expression
         }},
+
+        // if $condition {
+        //     $body
+        // }
         {'if': {
             'condition': String,
-            // "body" is actually an array of statements, not of anything, but
-            // tisch doesn't support recursive types, so this will have to do.
-            'body': [Any, ...etc]
+            'body': [statement, ...etc]
         }},
+
         {'rangeFor': {
-            // for $variableName := $sequence {
+            // for $variableName := range $sequence {
             //     $body
             // }
             'variableName': String,
             'sequence': String,
-            'body': [Any, ...etc] // statements, same as in "if" above
-        }});
+            'body': [statement, ...etc]
+        }}));
 
     const file = {
-        'package': String, // e.g. "foo" in "package foo"
+        'package': String, // the name of the package
         'imports': [{
             'package': String, // e.g. "google/protobuf/timestamp"
              'alias?': String // e.g. "pb" in 'import pb "services/types/proto"'
@@ -35,12 +77,19 @@
             'arguments': [{'name': String, 'type': String}, ...etc],
             'result': [{'name?': String, 'type': String}, ...etc],
             'body': {
+                // In this subset of Go, all variables used in a function
+                // (except loop variables) are declared at the top of the
+                // function before any other statements, just like good old
+                // C89.
                 'variables': [{
+                    // $var $type
+                    // or
+                    // $var $type = $value
                     'name': String,
                     'type': String,
                     'value?': String
                 }, ...etc],
-                'body': [statement, ...etc]
+                'statements': [statement, ...etc]
             }
         }, ...etc]
     };
