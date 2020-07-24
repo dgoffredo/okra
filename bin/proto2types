@@ -34,4 +34,4 @@ else {
     argsObject = {'protoFiles': [args[0]]};
 }
 
-console.log(JSON.stringify(proto2types(argsObject)));
+console.log(JSON.stringify(proto2types(argsObject).types));

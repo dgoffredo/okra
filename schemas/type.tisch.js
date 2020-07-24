@@ -6,6 +6,7 @@ define(['builtin.tisch.js'], builtin =>
         // A user-defined enumeration, i.e. a protobuf `enum`.
         {
             'kind': 'enum',
+            'file?': String, // path to .proto file where this enum is defined
             'name': String,
             'description?': String,
             'values': [{
@@ -18,6 +19,7 @@ define(['builtin.tisch.js'], builtin =>
         // A user-defined aggregate type, i.e. a protobuf `message`.
         {
             'kind': 'message',
+            'file?': String, // path to .proto file where this message is defined
             'name': String,
             'description?': String,
             // name of the field that identifies this object (e.g. "id")

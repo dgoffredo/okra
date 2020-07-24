@@ -16,7 +16,7 @@ const {dbdiff} = require('../../../lib/dbdiff');
 const {dbdiff2sql} = require('../dbdiff2sql');
 const {types2crud} = require('../types2crud'); // TODO
 
-const types = proto2types({
+const {types} = proto2types({
     protoFiles: [__dirname + '/enum-array-field.proto']
 });
 const {tables, legends} = types2tables(types);
