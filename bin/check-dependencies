@@ -1,0 +1,83 @@
+#!/bin/sh
+
+# Print to standard output any missing dependencies. If all dependencies are
+# satisfied, print a success message.
+#
+# Return status zero if all dependencies are satisfied. Return a nonzero
+# status if there are any unsatisfied dependencies.
+
+# Dependencies:
+# - Node.js v12
+# - protoc
+# - Python 3
+# - protobuf Python 3 libraries
+# - this git repository's submodules (under dependencies/)
+
+# node is installed
+if ! which node >/dev/null; then
+    echo 'node (Node.js) is not in the PATH.'
+    echo "If it's not installed, you can install it using the bin/update-node script."
+    exit 1
+fi
+
+# node major version 12 or greater
+node_major_version() {
+    node --version | sed 's/^v\([0-9]\+\).*/\1/'
+}
+
+if [ "$(node_major_version)" -lt 12 ]; then
+    echo "node (Node.js) version is too old."
+    echo "Major version 12 or greater is required, but $(node --version) is installed."
+    echo "You can update node using the bin/update-node script."
+    exit 2
+fi
+
+# protoc is installed
+if ! which protoc >/dev/null; then
+    echo 'protoc (the protocol buffer compiler) is not in the PATH.'
+    echo "If it's not installed, see README.md for instructions on how to install it."
+    exit 3
+fi
+
+# Python 3 is installed
+if ! which python3 >/dev/null; then
+    echo 'python3 (the Python 3 interpreter) is not in the PATH.'
+    echo "If it's not installed, see README.md for instructions on how to install it."
+    exit 4
+fi
+
+# the protobuf Python 3 libraries are installed
+# >/dev/null 2>&1 
+if ! python3 <<END_PYTHON
+import sys
+try:
+    import google.protobuf.compiler
+    sys.exit()
+except Exception:
+    sys.exit(1)
+END_PYTHON
+then
+    echo "Unable to import google.protobuf.compiler in Python 3."
+    echo "If the protocol buffer python3 package is not installed, see README.md for instructions on how to install it."
+    exit 5
+fi
+
+# This repository's submodules have been cloned.
+for path in $(git submodule | awk '{print $2}'); do
+    # .git "directories" of submodules are just files (not directories) that
+    # contain a reference to a directory within the parent repository's .git.
+    # If the submodule has not been cloned, then the submodule directory will
+    # be there, but it will be empty. I use ".git" as the file to check,
+    # because regardless of the composition of the submodule, the fact that
+    # it's a git repository means that, if cloned, it will have a .git file.
+    if ! [ -f "$path/.git" ]; then
+        echo "The git submodule $path has not been cloned."
+        echo "To clone all submodules, run the following command:"
+        echo ""
+        echo "     git submodule update --init --recursive"
+        echo ""
+        exit 6
+    fi
+done
+
+echo "You're all set."

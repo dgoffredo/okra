@@ -33,6 +33,10 @@ More
 - Node.js v12
 - protoc (the protocol buffer compiler and its Python libraries)
 - Python 3
+- git submodules under [dependencies/](dependencies/)
+
+[bin/check-dependencies](bin/check-dependencies) will report whether your
+system is missing any of the dependencies.
 
 ### Installing Dependencies on a Debian-based Linux
 [bin/update-node](bin/update-node) installs [nvm][1], the Node Version
