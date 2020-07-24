@@ -3,7 +3,7 @@
 // enough information to make rendering Go code for Okra neater than a rat's
 // nest of template strings.
 (function () {
-    const expression = recursive(({expression}) => or(
+    const expression = recursive(expression => or(
         // any code at all, expanded verbatim into the .go file
         {'raw': String},
 
@@ -39,7 +39,7 @@
         // $a.$b.$c
         {'.': [expression, ...etc]}));
 
-    const statement = recursive(({statement}) => or(
+    const statement = recursive(statement => or(
         // see `expression`, defined above
         expression,
 
