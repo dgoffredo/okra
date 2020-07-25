@@ -3,6 +3,10 @@
 // enough information to make rendering Go code for Okra neater than a rat's
 // nest of template strings.
 (function () {
+    // e.g. if we have [$a, $b, $c], then
+    // $a.$b.$c
+    const dot = {'dot': [String, ...etc]};
+
     const expression = recursive(expression => or(
         // any code at all, expanded verbatim into the .go file
         {'raw': String},
@@ -15,7 +19,10 @@
         // does not have to be JSON serialized to begin with.
         String,
 
-        // rendered as nil
+        // true, false
+        Boolean,
+
+        // nil
         null,
 
         // e.g. the name of a variable
@@ -23,8 +30,8 @@
 
         // $function($arguments)
         {'call': {
-            'function': String, // name of the function to call
-            'arguments': [expression, ...etc]
+            'function': or(String, dot),
+            'arguments': [expression, ...etc(1)]
         }},
 
         // $type{$elements}
@@ -35,9 +42,11 @@
             'elements': [expression, ...etc]
         }},
 
-        // e.g. if we have [$a, $b, $c], then
-        // $a.$b.$c
-        {'.': [expression, ...etc]}));
+        // a.b.c
+        dot,
+        
+        // &foo
+        {'address': expression}));
 
     const statement = recursive(statement => or(
         // see `expression`, defined above
@@ -53,7 +62,7 @@
         //     $body
         // }
         {'if': {
-            'condition': String,
+            'condition': expression,
             'body': [statement, ...etc]
         }},
 
@@ -61,10 +70,13 @@
             // for $variableName := range $sequence {
             //     $body
             // }
-            'variableName': String,
-            'sequence': String,
+            'variables': [String, ...etc],
+            'sequence': expression,
             'body': [statement, ...etc]
-        }}));
+        }},
+        
+        // return $expression, ...
+        {'return': [expression, ...etc]}));
 
     const file = {
         'package': String, // the name of the package
@@ -74,8 +86,8 @@
         }, ...etc],
         'functions': [{
             'name': String,
-            'arguments': [{'name': String, 'type': String}, ...etc],
-            'result': [{'name?': String, 'type': String}, ...etc],
+            'arguments': [{'name?': String, 'type': String}, ...etc],
+            'results': [{'name?': String, 'type': String}, ...etc],
             'body': {
                 // In this subset of Go, all variables used in a function
                 // (except loop variables) are declared at the top of the
@@ -87,7 +99,7 @@
                     // $var $type = $value
                     'name': String,
                     'type': String,
-                    'value?': String
+                    'value?': expression
                 }, ...etc],
                 'statements': [statement, ...etc]
             }

@@ -1,0 +1,209 @@
+// TODO: document
+define(['../../dependencies/tisch/tisch'], function (tisch) {
+
+const isGoFileAst = tisch.compileFile(`${__dirname}/ast.tisch.js`);
+
+function linePrinter({lines=[], indentLevel=0, tab='\t'}={}) {
+    return {
+        push: function (...linesToAdd) {
+            lines.push(...linesToAdd.map(
+                line => `${tab.repeat(indentLevel)}${line}`));
+        },
+        indented: function () {
+            return linePrinter({lines, indentLevel: indentLevel + 1, tab});
+        },
+        render: function () {
+            return lines.join('\n');
+        }
+    };
+}
+
+function stringifyExpression(expression) {
+    if (expression === null) {
+        return 'nil';
+    }
+    else if (typeof expression === 'number') {
+        return expression.toString();
+    }
+    else if (typeof expression === 'string') {
+        return str(expression);
+    }
+    else if (typeof expression === 'boolean') {
+        return expression.toString();
+    }
+    else if ('raw' in expression) {
+        return expression.raw;
+    }
+    else if (expression.symbol) {
+        return expression.symbol;
+    }
+    else if (expression.call) {
+        const {function: func, arguments} = expression.call;
+        const funcStr = typeof func === 'string'
+            ? stringifyExpression({symbol: func})
+            : stringifyExpression(func); // it's a "dot," e.g. foo.bar.baz
+        return `${funcStr}(${arguments.map(stringifyExpression).join(', ')})`;
+    }
+    else if (expression.slice) {
+        const type = expression.slice.type || '';
+        const elements = expression.slice.elements;
+        return `${type}{${elements.map(stringifyExpression).join(', ')}}`;
+    }
+    else if (expression.dot) {
+        return expression.dot.join('.');
+    }
+    else if (expression.address) {
+        return `&${stringifyExpression(expression.address)}`;
+    }
+    else {
+        throw Error(`Invalid AST expression: ${expression}`);
+    }
+}
+
+// Go string literals are compatible with JSON (according to my reading of
+// both specs, anyway). At least they're consistent for quoting the SQL
+// statements we need here.
+function str(text) {
+    return JSON.stringify(text);
+}
+
+function stringifyArgument({name, type}) {
+    if (name) {
+        return `${name} ${type}`;
+    }
+    else {
+        return type;
+    }
+}
+
+function renderVariable({name, type, value}, lines) {
+    const argument = stringifyArgument({name, type});
+    if (value === undefined) {
+        lines.push(`var ${argument}`);
+    }
+    else {
+        // This reminds me that we assume that an "expression" doesn't span
+        // multiple lines. In Go this isn't true; for example, an anonymous
+        // `func` is an expression. However, for the purposes of this AST we
+        // can assume that an expression renders to source code without any
+        // newlines.
+        lines.push(`var ${argument} = ${stringifyExpression(value)}`);
+    }
+}
+
+function stringifyAssignment({left: leftVars, right: rightExpr}) {
+    const leftHandSide = leftVars.join(', ');
+    const rightHandSide = stringifyExpression(rightExpr);
+    return `${leftHandSide} = ${rightHandSide}`;
+}
+
+function renderIf({condition: conditionExpr, body}, lines) {
+    lines.push(`if ${stringifyExpression(conditionExpr)} {`);
+    body.forEach(statement =>
+        renderStatement(statement, lines.indented()));
+    lines.push('}');
+}
+
+function renderRangeFor({variables, sequence, body}, lines) {
+    lines.push(`for ${variables.join(', ')} := ${stringifyExpression(sequence)} {`);
+    body.forEach(statement =>
+        renderStatement(statement, lines.indented()));
+    lines.push('}');
+}
+
+function stringifyReturn(expressions) {
+    return `return ${expressions.map(stringifyExpression).join(', ')}`;
+}
+
+function renderStatement(statement, lines) {
+    if (statement.assignment) {
+        lines.push(stringifyAssignment(statement.assignment));
+    }
+    else if (statement.if) {
+        renderIf(statement.if, lines);
+    }
+    else if (statement.rangeFor) {
+        renderRangeFor(statement.rangeFor, lines);
+    }
+    else if (statement.return) {
+        stringifyReturn(statement.return);
+    }
+    else {
+        lines.push(stringifyExpression(statement));
+    }
+}
+
+function renderFunction(func, lines) {
+    const {
+        name,
+        arguments, // [{name?: String, type: String}, ...],
+        results, // [{name?: String, type: String}, ...],
+        body: {
+            variables, // [{name: String, type: String, value?: String }, ...],
+            statements // [statement, ...]
+        }
+    } = func;
+
+    // func $name($arguments) $results {
+    //     $variables
+    //     $statements
+    // }
+    const resultTuple = results.length === 0
+        ? ''
+        : `(${resultTuple.map(stringifyArgument).join(', ')}) `; // +extra space 
+
+    lines.push(`func ${name}(${arguments.map(stringifyArgument).join(', ')}) ${resultTuple}{`);
+    variables.forEach(variable => renderVariable(variable, lines.indented()));
+
+    // Use a blank line to separate the variables section from the statements
+    // section, but only if neither is empty.
+    if (variables.length > 0 && statements.length > 0) {
+        lines.push('');
+    }
+
+    statements.forEach(statement => renderStatement(statement, lines.indented()));
+    lines.push('}');
+}
+
+function renderFile(goFile, lines) {
+    isGoFileAst.enforce(goFile);
+
+    // package foo
+    lines.push(`package ${goFile.package}`);
+
+    // import (
+    //     thing "path/to/thing/package"
+    //     "some/other/package"
+    // )
+    if (goFile.imports.length > 0) {
+        lines.push('');
+        lines.push('import (');
+        lines.indented().push(...goFile.imports.map(({package, alias}) => {
+            if (alias) {
+                return `${alias} ${str(package)}`;
+            }
+            else {
+                return `${str(package)}`;
+            }
+        }));
+        lines.push(')')
+    }
+
+    // func foo(...) ... {
+    //     ...
+    // }
+    // ...
+    goFile.functions.forEach(func => {
+        lines.push('');
+        renderFunction(func, lines);
+    });
+}
+
+return {
+    renderFile: function (goFile) {
+        const lines = linePrinter();
+        renderFile(goFile, lines);
+        return lines.render();
+    }
+};
+});
