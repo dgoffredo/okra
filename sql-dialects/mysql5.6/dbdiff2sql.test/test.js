@@ -38,7 +38,7 @@ console.log(
 
 const newTypes = proto2types({
     protoFiles: [__dirname + '/enum-array-field-2.proto']
-});
+}).types;
 const newTables = types2tables(newTypes).tables;
 
 let sql;

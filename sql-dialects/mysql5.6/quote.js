@@ -1,4 +1,4 @@
-// Functions shared by `dbdiff2sql.js` and `types2crud.js`
+// Quote identifiers (e.g. table names) and strings for MySQL statements.
 define([], function () {
 'use strict';
 

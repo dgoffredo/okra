@@ -3,11 +3,11 @@
 // their legends. The SQL statements used in the CRUD operations are
 // compatible with MySQL 5.6.
 
-define(['../../schemas/schemas', '../../dependencies/tisch/tisch', './common'],
-function (schemas, tisch, common) {
+define(['../../schemas/schemas', '../../dependencies/tisch/tisch', './quote'],
+function (schemas, tisch, quote) {
 'use strict';
 
-const {quoteName} = common;
+const {quoteName} = quote;
 
 // Return a `RegExp` object compiled from a pattern that is the disjunction of
 // the patterns of the specified `regexes`. The "global" flag ("g") will be
