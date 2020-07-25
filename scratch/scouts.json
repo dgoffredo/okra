@@ -1,0 +1,168 @@
+[
+  {
+    "kind": "message",
+    "file": "scouts.proto",
+    "name": ".scouts.BoyScout",
+    "idFieldName": "id",
+    "fields": [
+      {
+        "id": 1,
+        "name": "id",
+        "type": {
+          "builtin": "TYPE_STRING"
+        },
+        "description": "RFC 4122 UUID"
+      },
+      {
+        "id": 2,
+        "name": "full_name",
+        "type": {
+          "builtin": "TYPE_STRING"
+        },
+        "description": "e.g. Samayamantri Venkata Rama Naga Butchi Anjaneya Satya Krishna Vijay"
+      },
+      {
+        "id": 3,
+        "name": "short_name",
+        "type": {
+          "builtin": "TYPE_STRING"
+        },
+        "description": "e.g. Alice"
+      },
+      {
+        "id": 4,
+        "name": "birthdate",
+        "type": {
+          "builtin": ".google.type.Date"
+        }
+      },
+      {
+        "id": 11,
+        "name": "join_time",
+        "type": {
+          "builtin": ".google.protobuf.Timestamp"
+        }
+      },
+      {
+        "id": 6,
+        "name": "country_code",
+        "type": {
+          "builtin": "TYPE_STRING"
+        },
+        "description": "ISO 3166-1 alpha-3 upper-case"
+      },
+      {
+        "id": 10,
+        "name": "language_code",
+        "type": {
+          "builtin": "TYPE_STRING"
+        },
+        "description": "ISO 639-1 two-character lower-case"
+      },
+      {
+        "id": 7,
+        "name": "pack_code",
+        "type": {
+          "builtin": "TYPE_UINT32"
+        },
+        "description": "as administered by the Head Wolf"
+      },
+      {
+        "id": 5,
+        "name": "rank",
+        "type": {
+          "enum": ".scouts.Rank"
+        }
+      },
+      {
+        "id": 8,
+        "name": "badges",
+        "type": {
+          "array": {
+            "enum": ".scouts.Badge"
+          }
+        }
+      },
+      {
+        "id": 9,
+        "name": "favorite_songs",
+        "type": {
+          "array": {
+            "builtin": "TYPE_STRING"
+          }
+        },
+        "description": "formatted as  \"Artist Name - Song Title\""
+      }
+    ]
+  },
+  {
+    "kind": "enum",
+    "file": "scouts.proto",
+    "name": ".scouts.Rank",
+    "values": [
+      {
+        "id": 0,
+        "name": "RANK_UNKNOWN"
+      },
+      {
+        "id": 1,
+        "name": "RANK_WEBELOS"
+      },
+      {
+        "id": 2,
+        "name": "RANK_BOY_SCOUT"
+      },
+      {
+        "id": 3,
+        "name": "RANK_EAGLE_SCOUT"
+      },
+      {
+        "id": 4,
+        "name": "RANK_SPACE_CADET"
+      },
+      {
+        "id": 5,
+        "name": "RANK_SAMURAI"
+      }
+    ]
+  },
+  {
+    "kind": "enum",
+    "file": "scouts.proto",
+    "name": ".scouts.Badge",
+    "values": [
+      {
+        "id": 0,
+        "name": "BADGE_UNKNOWN"
+      },
+      {
+        "id": 1,
+        "name": "BADGE_WOODWORKING"
+      },
+      {
+        "id": 2,
+        "name": "BADGE_FIRESTARTING"
+      },
+      {
+        "id": 3,
+        "name": "BADGE_RAINMAKING"
+      },
+      {
+        "id": 4,
+        "name": "BADGE_ASSKICKING"
+      },
+      {
+        "id": 5,
+        "name": "BADGE_HEADSCRATCHING"
+      },
+      {
+        "id": 6,
+        "name": "BADGE_BALLET"
+      },
+      {
+        "id": 7,
+        "name": "BADGE_FISHING"
+      }
+    ]
+  }
+]

@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package scouts;
+
+option go_package = "boyscouts.com/type/scouts;scouts";
+
+import "google/protobuf/timestamp.proto";
+import "google/type/date.proto";
+
+message BoyScout {
+    string id = 1; // RFC 4122 UUID
+    string full_name = 2; // e.g. Samayamantri Venkata Rama Naga Butchi Anjaneya Satya Krishna Vijay
+    string short_name = 3; // e.g. Alice
+    google.type.Date birthdate = 4;
+    google.protobuf.Timestamp join_time = 11;
+
+    string country_code = 6; // ISO 3166-1 alpha-3 upper-case
+    string language_code = 10; // ISO 639-1 two-character lower-case
+    uint32 pack_code = 7; // as administered by the Head Wolf
+
+    Rank rank = 5;
+    repeated Badge badges = 8;
+    repeated string favorite_songs = 9; // formatted as  "Artist Name - Song Title"
+}
+
+enum Rank {
+    RANK_UNKNOWN = 0;
+    RANK_WEBELOS = 1;
+    RANK_BOY_SCOUT = 2;
+    RANK_EAGLE_SCOUT = 3;
+    RANK_SPACE_CADET = 4;
+    RANK_SAMURAI = 5;
+}
+
+enum Badge {
+    BADGE_UNKNOWN = 0;
+    BADGE_WOODWORKING = 1;
+    BADGE_FIRESTARTING = 2;
+    BADGE_RAINMAKING = 3;
+    BADGE_ASSKICKING = 4;
+    BADGE_HEADSCRATCHING = 5;
+    BADGE_BALLET = 6;
+    BADGE_FISHING = 7;
+}

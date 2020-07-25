@@ -17,6 +17,6 @@ func UpdateUserDetails(db *sql.DB, value pb.UserDetails, fieldMask []string) err
 	// ...
 }
 
-func DeleteUserDetails(db *sql.DB, id []int32) error {
+func DeleteUserDetails(db *sql.DB, id int32) error {
 	// ...
 }
