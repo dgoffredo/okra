@@ -12,8 +12,8 @@ define([
     function ({renderFile}, tisch, schemas) {
 'use strict';
 
-// Return a string containing Go source code for a module that implements
-// the CRUD operations indicated by the specified arguments:
+// Return a string of Go source code for a module that implements the CRUD
+// operations indicated by the specified arguments:
 // - `crud`: an object as produced by some SQL dialect's `types2crud` function
 // - `types`: an array of Okra types
 // - `options`: an object of proto file options (by file)

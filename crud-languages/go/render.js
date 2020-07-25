@@ -77,6 +77,9 @@ function stringifyArgument({name, type}) {
 }
 
 function renderVariable({name, type, value}, lines) {
+    // Since a variable is something like
+    //     var foo type = value
+    // we can reuse the "foo type" as rendered for function arguments.
     const argument = stringifyArgument({name, type});
     if (value === undefined) {
         lines.push(`var ${argument}`);
@@ -105,7 +108,7 @@ function renderIf({condition: conditionExpr, body}, lines) {
 }
 
 function renderRangeFor({variables, sequence, body}, lines) {
-    lines.push(`for ${variables.join(', ')} := ${stringifyExpression(sequence)} {`);
+    lines.push(`for ${variables.join(', ')} := range ${stringifyExpression(sequence)} {`);
     body.forEach(statement =>
         renderStatement(statement, lines.indented()));
     lines.push('}');
@@ -134,13 +137,14 @@ function renderStatement(statement, lines) {
 }
 
 function renderFunction(func, lines) {
+    // See `ast.tisch.js` for the shapes of `arguments`, `variables`, etc.
     const {
         name,
-        arguments, // [{name?: String, type: String}, ...],
-        results, // [{name?: String, type: String}, ...],
+        arguments,
+        results,
         body: {
-            variables, // [{name: String, type: String, value?: String }, ...],
-            statements // [statement, ...]
+            variables,
+            statements
         }
     } = func;
 
@@ -200,6 +204,8 @@ function renderFile(goFile, lines) {
 }
 
 return {
+    // Return a string of Go source code rendered from the specified `goFile`
+    // AST.
     renderFile: function (goFile) {
         const lines = linePrinter();
         renderFile(goFile, lines);
