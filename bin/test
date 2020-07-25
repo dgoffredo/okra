@@ -2,10 +2,11 @@
 
 set -e # bail if any command terminates with a nonzero status
 
-# lib/ directory of this repository. The unit tests are under there.
-libdir=$(dirname $(dirname $(realpath $0)))/lib
+repo="$(dirname $(dirname $(realpath $0)))"
+cd "$repo"
 
-for test_driver in $libdir/*.test/test.js; do
+find lib/ crud-languages/ sql-dialects/ -type f -path '*.test/test.js' | \
+while read -r test_driver; do
     echo "Running test driver $test_driver..."
     $test_driver
 done
