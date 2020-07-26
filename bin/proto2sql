@@ -1,0 +1,49 @@
+#!/usr/bin/env node
+'use strict';
+
+// Print MySQL 5.6 statements to create tables corresponding to the types in a
+// specified protocol buffer schema.
+//
+// Usage:
+//
+// $ proto2sql <.proto file>
+//
+// # JSON arguments to `proto2types` function 
+// $ proto2sql --json '{ ... json arguments ... }'
+
+// Patch node's "require" system to allow for "define"-based modules.
+require('../dependencies/node-amd-loader/amd-loader');
+
+const {proto2types} = require('../lib/proto2types');
+const {types2tables} = require('../lib/types2tables');
+const {dbdiff2sql} = require('../sql-dialects/mysql5.6/dbdiff2sql.js');
+const process = require('process');
+
+const [node, script, ...args] = process.argv;
+let argsObject;
+
+if (args.length > 2) {
+    console.error(`Specified ${args.length} arguments, when one or two are expected.`);
+    process.exit(1);
+}
+else if (args.length === 0 || (args.length === 2 && args[0] !== '--json')) {
+    console.error('Specify either a .proto file path, or --json {...}');
+    process.exit(2);
+}
+else if (args.length === 2) {
+    argsObject = JSON.parse(args[1]);
+}
+else {
+    argsObject = {'protoFiles': [args[0]]};
+}
+
+const {types, options} = proto2types(argsObject);
+const {tables, legends} = types2tables(types);
+const dbdiff = {
+    allTables: tables,
+    newTables: tables,
+    modifications: {}
+};
+const sql = dbdiff2sql(dbdiff);
+
+console.log(sql);

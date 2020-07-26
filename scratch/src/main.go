@@ -6,6 +6,6 @@ import (
 )
 
 func main() {
-	crud.DeleteBoyScout(nil, "hello")
+	crud.DoTheThing()
 	fmt.Println("we're done")
 }
