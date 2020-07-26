@@ -182,8 +182,9 @@ function renderFile(goFile, lines) {
     if (goFile.imports.length > 0) {
         lines.push('');
         lines.push('import (');
-        lines.indented().push(...goFile.imports.map(({package, alias}) => {
-            if (alias) {
+        lines.indented().push(...Object.keys(goFile.imports).sort().map(package => {
+            const alias = goFile.imports[package];
+            if (alias !== null) {
                 return `${alias} ${str(package)}`;
             }
             else {
@@ -197,9 +198,22 @@ function renderFile(goFile, lines) {
     //     ...
     // }
     // ...
-    goFile.functions.forEach(func => {
+    // type bar struct {
+    //     ...
+    // }
+    // ...
+    goFile.declarations.forEach(declaration => {
         lines.push('');
-        renderFunction(func, lines);
+        if (declaration.function) {
+            renderFunction(declaration.function, lines);
+        }
+        else {
+            // `lines` will still apply indentation logic to the first line of
+            // `declaration.raw`, but since `goFile` is rendered at indentation
+            // level zero, it doesn't matter. The code will appear in the
+            // output unmodified.
+            lines.push(declaration.raw);
+        }
     });
 }
 

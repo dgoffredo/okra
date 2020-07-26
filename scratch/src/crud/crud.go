@@ -10,7 +10,6 @@ import (
 	pb "boyscouts.com/type/scouts"
 	"google.golang.org/genproto/googleapis/type/date"
 	"github.com/golang/protobuf/ptypes/timestamp"
-	"github.com/golang/protobuf/ptypes"
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -119,12 +118,11 @@ func (valuer timestampValuer) Value() (driver.Value, error) {
 		return nil, nil
 	}
 
-	value, err := ptypes.Timestamp(valuer.source)
-	if err != nil {
-		return nil, err
-	}
+	ts := *valuer.source
+	var microsecondsSinceEpoch int64 =
+	    ts.Seconds * 1_000_000 + int64(ts.Nanos) / 1000
 
-	return driver.Value(value), nil
+	return driver.Value(microsecondsSinceEpoch), nil
 }
 
 // fromTimstamp is a constructor for timestampValuer. It's redundant but I like

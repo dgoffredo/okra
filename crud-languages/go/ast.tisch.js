@@ -31,7 +31,7 @@
         // $function($arguments)
         {'call': {
             'function': or(String, dot),
-            'arguments': [expression, ...etc(1)]
+            'arguments': [expression, ...etc]
         }},
 
         // $type{$elements}
@@ -80,30 +80,42 @@
 
     const file = {
         'package': String, // the name of the package
-        'imports': [{
-            'package': String, // e.g. "google/protobuf/timestamp"
-             'alias?': String // e.g. "pb" in 'import pb "services/types/proto"'
-        }, ...etc],
-        'functions': [{
-            'name': String,
-            'arguments': [{'name?': String, 'type': String}, ...etc],
-            'results': [{'name?': String, 'type': String}, ...etc],
-            'body': {
-                // In this subset of Go, all variables used in a function
-                // (except loop variables) are declared at the top of the
-                // function before any other statements, just like good old
-                // C89.
-                'variables': [{
-                    // $var $type
-                    // or
-                    // $var $type = $value
-                    'name': String,
-                    'type': String,
-                    'value?': expression
-                }, ...etc],
-                'statements': [statement, ...etc]
-            }
-        }, ...etc]
+        'imports': {
+            // The keys are full package name, e.g. "google/protobuf/timestamp"
+            // The values are package aliases, e.g. "pb" in
+            // 'import pb "services/types/proto"', or `null` for no alias.
+            [Any]: or(String, null)
+        },
+        'declarations': [or({
+            // func $name($arguments) $results {
+            //     $body
+            // }
+            'function': {
+                'name': String,
+                'arguments': [{'name?': String, 'type': String}, ...etc],
+                'results': [{'name?': String, 'type': String}, ...etc],
+                'body': {
+                    // In this subset of Go, all variables used in a function
+                    // (except loop variables) are declared at the top of the
+                    // function before any other statements, just like good old
+                    // C89.
+                    'variables': [{
+                        // $var $type
+                        // or
+                        // $var $type = $value
+                        'name': String,
+                        'type': String,
+                        'value?': expression
+                    }, ...etc],
+                    'statements': [statement, ...etc]
+                }
+            }},
+
+            // Included in the output source verbatim. This is used for
+            // predetermined snippets of Go code that do not depend on the
+            // input, such as utility functions and types.
+            {'raw': String}),
+        ...etc]
     };
 
     return file;

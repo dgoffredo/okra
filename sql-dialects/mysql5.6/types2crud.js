@@ -1,6 +1,6 @@
-// This module exports a function, `types2crud`, that produces a description
-// of create-read-update-delete (CRUD) operations for a given set of types and
-// their legends. The SQL statements used in the CRUD operations are
+// This module exports a function, `types2crud`, that produces a description of
+// create-read-update-delete (CRUD) operations for a given set of types and
+// their legends. The SQL statements used in the CRUD instructions are
 // compatible with MySQL 5.6.
 
 define(['../../schemas/schemas', '../../dependencies/tisch/tisch', './quote'],
@@ -63,8 +63,6 @@ const sqline = (function () {
 // types, so that Go/Python/C++/etc. code generators can target that
 // representation regardless of which particular database driver library they
 // use.
-//
-// As of this writing, only the time-related type is treated specially.
 function selector({columnName, fieldType}) {
     if (fieldType.builtin === '.google.protobuf.Timestamp') {
         // timestamp(6) → unix timestamp in microseconds
@@ -99,14 +97,14 @@ function parameter(fieldType) {
     }
 }
 
-// Return a CRUD operation for adding values into the specified
+// Return a CRUD instruction for adding values into the specified
 // `arrayTableName` from the specified `arrayField` of the message type having
 // the specified `messageIdField`, where the `messageIdField` has the
 // specified `messageIdFieldType` and the elements of the array field have the
-// specified `arrayFieldType`. The returned operation will require that
+// specified `arrayFieldType`. The returned instruction will require that
 // `arrayField` is included in the operation (if `arrayField` is not included,
-// a code generator will not perform the operation).
-function operationInsertArray({
+// a code generator will not perform the instruction).
+function instructionInsertArray({
     arrayTableName,
     messageIdField,
     messageIdFieldType,
@@ -114,7 +112,7 @@ function operationInsertArray({
     arrayFieldType
 }) {
     return {
-        operation: 'exec-with-tuples',
+        instruction: 'exec-with-tuples',
         condition: {included: arrayField},
         tuple: `(${parameter(messageIdFieldType)}, ${parameter(arrayFieldType)})`,
         sql: sqline(`insert into
@@ -128,18 +126,18 @@ function operationInsertArray({
     };
 }
 
-// Return a CRUD operation for selecting rows from the specified
+// Return a CRUD instruction for selecting rows from the specified
 // `arrayTableName` representing an array of the specified `arrayType` in the
 // message type having the specified `messageIdField` with the specified
 // `messageIdFieldType`.
-function operationSelectArray({
+function instructionSelectArray({
     arrayTableName,
     arrayType, // type of the array itself, e.g. `{array: ...}`
     messageIdField,
     messageIdFieldType
 }) {
     return {
-        operation: 'query',
+        instruction: 'query',
 
         // It's important that we select only the `value` column. Or, at the
         // very least, the `value` column has to be the first column selected,
@@ -154,22 +152,22 @@ function operationSelectArray({
     };
 }
 
-// Return a CRUD operation that deletes all rows from the specified
+// Return a CRUD instruction that deletes all rows from the specified
 // `arrayTableName` whose message ID column ("id") of the specified type
 // `messageIdFieldType` has the same value as the specified `messageIdField`
 // (`messageIdField` is the _name_ of the field whose value we're interested
 // in). Optionally specify a `conditionField`, which makes the returned
-// operation applicable only if that field is included in the relevant
+// instruction applicable only if that field is included in the relevant
 // operation (e.g. deleting values before replacing them in an "update," but
 // only if we're updating that field).
-function operationDeleteArray({
+function instructionDeleteArray({
     arrayTableName,
     messageIdField,
     messageIdFieldType,
     conditionField
 }) {
     return {
-        operation: 'exec',
+        instruction: 'exec',
         sql: sqline(`delete from ${quoteName(arrayTableName)}
                 where ${quoteName('id')} = ${parameter(messageIdFieldType)};`),
         parameters: [
@@ -180,10 +178,10 @@ function operationDeleteArray({
     };
 }
 
-// Return a CRUD operation that selects the scalar fields of an instance of
+// Return a CRUD instruction that selects the scalar fields of an instance of
 // the specified `type` from the database. Use the specified `legend` to map
 // message fields to table columns.
-function operationSelectMessage({type, legend}) {
+function instructionSelectMessage({type, legend}) {
     const {scalarFieldSources} = byMultiplicity(legend.fieldSources);
     const keyColumnName = scalarFieldSources
         .find(({fieldName}) => fieldName === type.idFieldName)
@@ -196,7 +194,7 @@ function operationSelectMessage({type, legend}) {
     const idFieldType = fieldTypes[type.idFieldName];
 
     return {
-        operation: 'query',
+        instruction: 'query',
         sql: sqline(`select ${selectors.join(', ')}
             from ${quoteName(legend.tableName)}
             where ${quoteName(keyColumnName)} = ${parameter(idFieldType)};`),
@@ -226,11 +224,11 @@ function sqlClauseUpdateColumn({columnName, fieldType}) {
       end`;
 }
 
-// Return a CRUD operation that updates the scalar fields of an instance of
+// Return a CRUD instruction that updates the scalar fields of an instance of
 // the specified `type` in the database, or return `undefined` if `type` does
 // not have any updatable fields. Use the specified `legend` to map message
 // fields to table columns.
-function operationUpdateMessage({type, legend}) {
+function instructionUpdateMessage({type, legend}) {
     const {scalarFieldSources} = byMultiplicity(legend.fieldSources);
     const keyColumnName = scalarFieldSources
         .find(({fieldName}) => fieldName === type.idFieldName)
@@ -251,7 +249,7 @@ function operationUpdateMessage({type, legend}) {
     }
 
     return {
-        operation: 'exec',
+        instruction: 'exec',
         sql: sqline(`update ${quoteName(legend.tableName)}
             set ${scalarFieldInfos.map(sqlClauseUpdateColumn).join(', ')}
             where ${quoteName(keyColumnName)} = ${parameter(idFieldType)};`),
@@ -293,10 +291,10 @@ function byMultiplicity(fieldSources) {
 //  | |____| | |  __/ (_| | ||  __/
 //   \_____|_|  \___|\__,_|\__\___|
 // 
-// Return an array of CRUD operations that add a new instance of the specified
+// Return an array of CRUD instructions that add a new instance of the specified
 // `type` to the database. Use the specified `legend` to map message fields to
 // table columns.
-function operationsCreateMessage({type, legend}) {
+function instructionsCreateMessage({type, legend}) {
     const {
         scalarFieldSources,
         arrayFieldSources
@@ -311,7 +309,7 @@ function operationsCreateMessage({type, legend}) {
         // Insert a new row into the table of the message type, specifying
         // all non-array fields.
         {
-            operation: 'exec',
+            instruction: 'exec',
             sql: sqline(`insert into ${quoteName(legend.tableName)}(
                 ${scalarFieldSources.map(({columnName}) => quoteName(columnName)).join(', ')})
                 values (${scalarFieldInfos.map(parameter).join(', ')});`),
@@ -320,7 +318,7 @@ function operationsCreateMessage({type, legend}) {
 
         // For each array field, add rows to the corresponding table.
         ...arrayFieldSources.map(({fieldName, tableName}) =>
-            operationInsertArray({
+            instructionInsertArray({
                 arrayTableName: tableName,
                 messageIdField: type.idFieldName,
                 messageIdFieldType: fieldTypes[type.idFieldName],
@@ -337,10 +335,10 @@ function operationsCreateMessage({type, legend}) {
 //  | | \ \  __/ (_| | (_| |
 //  |_|  \_\___|\__,_|\__,_|
 //
-// Return an array of CRUD operations that read an instance of the specified
+// Return an array of CRUD instructions that read an instance of the specified
 // message `type` from the database. Use the specified `legend` to map
 // message fields to table columns.
-function operationsReadMessage({type, legend}) {
+function instructionsReadMessage({type, legend}) {
     const {
         scalarFieldSources,
         arrayFieldSources
@@ -351,11 +349,11 @@ function operationsReadMessage({type, legend}) {
 
     return [
         // Query the message table.
-        operationSelectMessage({type, legend}),
+        instructionSelectMessage({type, legend}),
 
         // Read the resulting row.
         {
-            operation: 'read-row',
+            instruction: 'read-row',
             destinations: scalarFieldSources.map(
                 ({fieldName}) => ({field: fieldName}))
         },
@@ -366,7 +364,7 @@ function operationsReadMessage({type, legend}) {
         ...arrayFieldSources.map(({fieldName, tableName}) => [
             // e.g.
             // select value from boyscout_badges where id = ?;
-            operationSelectArray({
+            instructionSelectArray({
                 arrayTableName: tableName,
                 arrayType: fieldTypes[fieldName],
                 messageIdField: type.idFieldName,
@@ -377,7 +375,7 @@ function operationsReadMessage({type, legend}) {
             // for row in result:
             //     row.scan(&boyscout.badges.push_back())
             {
-                operation: 'read-array',
+                instruction: 'read-array',
                 destination: {field: fieldName}
         }
         ]).flat()
@@ -393,10 +391,10 @@ function operationsReadMessage({type, legend}) {
 //         | |                        
 //         |_|
 //
-// Return an array of CRUD operations that update an instance of the specified
+// Return an array of CRUD instructions that update an instance of the specified
 // message `type` in the database. Use the specified `legend` to map message
 // fields to table columns.
-function operationsUpdateMessage({type, legend}) {
+function instructionsUpdateMessage({type, legend}) {
     // "Update" is interesting because it takes field inclusion into account
     // (i.e. when somebody does an update, they can specify some subset of
     // message fields to be updated, rather than all of them).
@@ -406,9 +404,9 @@ function operationsUpdateMessage({type, legend}) {
 
     return [
         // Update the message table.
-        // `operationUpdateMessage` will return `undefined` if no operation is
+        // `instructionUpdateMessage` will return `undefined` if no instruction is
         // needed, so we "filter out" that case here.
-        ...[operationUpdateMessage({type, legend})].filter(op => op),
+        ...[instructionUpdateMessage({type, legend})].filter(op => op),
 
         // For each array field:
         // - remove old (all) values from array table (only if the array is
@@ -417,7 +415,7 @@ function operationsUpdateMessage({type, legend}) {
         ...arrayFieldSources.map(({fieldName, tableName}) => [
             // e.g.
             // delete from boyscout_badges where id = ?;
-            operationDeleteArray({
+            instructionDeleteArray({
                 arrayTableName: tableName,
                 messageIdField: type.idFieldName,
                 messageIdFieldType: fieldTypes[type.idFieldName],
@@ -426,7 +424,7 @@ function operationsUpdateMessage({type, legend}) {
 
             // e.g.
             // insert into boyscout_badges values (?, ?), (?, ?) ...
-            operationInsertArray({
+            instructionInsertArray({
                 arrayTableName: tableName,
                 messageIdField: type.idFieldName,
                 messageIdFieldType: fieldTypes[type.idFieldName],
@@ -444,10 +442,10 @@ function operationsUpdateMessage({type, legend}) {
 //  | |__| |  __/ |  __/ ||  __/
 //  |_____/ \___|_|\___|\__\___|
 //
-// Return an array of CRUD operations that delete an instance of the specified
+// Return an array of CRUD instructions that delete an instance of the specified
 // message `type` from the database. Use the specified `legend` to map message
 // fields to table columns.
-function operationsDeleteMessage({type, legend}) {
+function instructionsDeleteMessage({type, legend}) {
     const {
         scalarFieldSources,
         arrayFieldSources
@@ -464,7 +462,7 @@ function operationsDeleteMessage({type, legend}) {
         // Rows in array tables need to be deleted first, since they have
         // foreign keys referencing the row in the message table.
         ...arrayFieldSources.map(({tableName}) =>
-            operationDeleteArray({
+            instructionDeleteArray({
                 arrayTableName: tableName,
                 messageIdField: type.idFieldName,
                 messageIdFieldType: idFieldType
@@ -473,7 +471,7 @@ function operationsDeleteMessage({type, legend}) {
         // Once we've deleted everything that references the instance's row in
         // the message table, we can delete that row.
         {
-            operation: 'exec',
+            instruction: 'exec',
             sql: sqline(`delete from ${quoteName(legend.tableName)}
                 where ${quoteName(keyColumnName)} = ${parameter(idFieldType)};`),
             parameters: [
@@ -533,14 +531,14 @@ function types2crud(types) {
             // CRUD operations are for message types only.
             .filter(([_, {type}]) => type.kind === 'message')
             // Each message type name is mapped to an object of arrays of CRUD
-            // operations.
+            // instructions.
             .map(([typeName, {type, legend}]) => [
                 typeName,
                 {
-                    create: operationsCreateMessage({type, legend}),
-                    read: operationsReadMessage({type, legend}),
-                    update: operationsUpdateMessage({type, legend}),
-                    delete: operationsDeleteMessage({type, legend})
+                    create: instructionsCreateMessage({type, legend}),
+                    read: instructionsReadMessage({type, legend}),
+                    update: instructionsUpdateMessage({type, legend}),
+                    delete: instructionsDeleteMessage({type, legend})
                 }
             ]));
 
