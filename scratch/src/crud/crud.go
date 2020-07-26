@@ -48,7 +48,7 @@ func (scanner timestampScanner) Scan(value interface{}) (err error) {
 		microsecondsSinceEpoch := scanner.intermediary.Int64
 		*scanner.destination = &timestamp.Timestamp{
 			Seconds: microsecondsSinceEpoch / 1_000_000,
-			Nanos: int32(microsecondsSinceEpoch % 1_000_000)}
+			Nanos: int32(microsecondsSinceEpoch % 1_000_000) * 1000}
 	}
 
 	return
@@ -148,25 +148,34 @@ func contains(slice []string, value string) bool {
 	return false
 }
 
+/*
+type BoyScout struct {
+	Id            string
+	FullName      string
+	ShortName     string
+	Birthdate     *date.Date
+	JoinTime      *timestamp.Timestamp
+	CountryCode   string
+	LanguageCode  string
+	PackCode      uint32
+	Rank          Rank
+	Badges        []Badge
+	FavoriteSongs []string
+}
+*/
+
 // UpdateBoyScout shut up linter
 // We could have a `fieldMask` for all operations, but it's most useful for
 // updates, and I'd like to keep it simple otherwise.
 func UpdateBoyScout(ctx context.Context, db *sql.DB, value pb.BoyScout, fieldMask []string) error {
-	var err error
 	/*
+	var err error
 	var transaction *sql.Tx
 	var result sql.Result
 
 	transaction, err = db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-
-    result, err = transaction.Exec(
-		"update rank set description = case when ? then ? else null end where id=1;",
-		optionalParameter{driver.Value("hello there"), contains(fieldMask, "description")})
-    */
-	return err
+	*/
+	return nil
 }
 
 // DeleteBoyScout shut up linter
