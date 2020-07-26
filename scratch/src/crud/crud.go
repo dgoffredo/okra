@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	// "database/sql/driver"
 	"fmt"
+	"strings"
 
 	pb "boyscouts.com/type/scouts"
 	"google.golang.org/genproto/googleapis/type/date"
@@ -106,6 +107,24 @@ func intoDate(destination **date.Date) dateScanner {
 	var scanner dateScanner
 	scanner.destination = destination
 	return scanner
+}
+
+func withTuples(sqlStatement string, sqlTuple string, numTuples int) string {
+	if numTuples < 1 {
+		panic(fmt.Sprintf("withTuples requires at least one tuple, but %d were specified",
+		    numTuples))
+	}
+
+	var builder strings.Builder
+	builder.WriteString(sqlStatement)
+	i := 0
+	builder.WriteString(sqlTuple)
+	for i++; i < numTuples; i++ {
+		builder.WriteString(", ")
+		builder.WriteString(sqlTuple)
+	}
+	
+	return builder.String()
 }
 
 // CreateBoyScout shut up linter
@@ -211,4 +230,8 @@ func DoTheThing() {
 	err = transaction.QueryRow("select curdate();").Scan(intoDate(&scout.Birthdate))
 	fmt.Println("returned: ", err)
 	fmt.Println("scout.Birthdate:", scout.Birthdate)
+
+	fmt.Println(withTuples("insert into `foo`(`x`, `y`) values", "(?, ?)", 10))
+	
+	transaction.Commit() // TODO: returns error
 }
