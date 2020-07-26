@@ -3,13 +3,14 @@ package crud
 import (
 	"context"
 	"database/sql"
-	// "database/sql/driver"
+	"database/sql/driver"
 	"fmt"
 	"strings"
 
 	pb "boyscouts.com/type/scouts"
 	"google.golang.org/genproto/googleapis/type/date"
 	"github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/golang/protobuf/ptypes"
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -107,6 +108,49 @@ func intoDate(destination **date.Date) dateScanner {
 	var scanner dateScanner
 	scanner.destination = destination
 	return scanner
+}
+
+type timestampValuer struct {
+	source *timestamp.Timestamp
+}
+
+func (valuer timestampValuer) Value() (driver.Value, error) {
+    if valuer.source == nil {
+		return nil, nil
+	}
+
+	value, err := ptypes.Timestamp(valuer.source)
+	if err != nil {
+		return nil, err
+	}
+
+	return driver.Value(value), nil
+}
+
+// fromTimstamp is a constructor for timestampValuer. It's redundant but I like
+// the naming convention.
+func fromTimestamp(source *timestamp.Timestamp) timestampValuer {
+	return timestampValuer{source}
+}
+
+type dateValuer struct {
+	source *date.Date
+}
+
+func (valuer dateValuer) Value() (driver.Value, error) {
+	if valuer.source == nil {
+		return nil, nil
+	}
+
+	d := valuer.source // for brevity
+	dateString := fmt.Sprintf("%04d-%02d-%02d", d.Year, d.Month, d.Day)
+	return driver.Value(dateString), nil
+}
+
+// fromDate is a constructor for dateValuer. It's redundant but I like the
+// naming convention.
+func fromDate(source *date.Date) dateValuer {
+	return dateValuer{source}
 }
 
 func withTuples(sqlStatement string, sqlTuple string, numTuples int) string {
