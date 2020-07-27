@@ -28,6 +28,10 @@ define([], function () {
 //             ] 
 //         }
 //     }
+//
+// The Go code is indented using tab characters, while this javascript code is
+// indented using four space characters. Please use tabs for the Go code and
+// spaces for the javascript code.
 const prerenderedDeclarations = {
     // When a timestamp is an output parameter in SQL, such as when reading
     // (getting) a message that has a timestamp field, `intoTimestamp` wraps
@@ -109,7 +113,7 @@ func intoTimestamp(destination **timestamp.Timestamp) timestampScanner {
 		var result date.Date
 		
 		n, err := fmt.Sscanf(dateString, "%d-%d-%d", &result.Year, &result.Month, &result.Day)
-        if err != nil {
+		if err != nil {
 			return err
 		}
 		if n != 3 {
@@ -160,7 +164,7 @@ func intoDate(destination **date.Date) dateScanner {
 
 	ts := *valuer.source
 	var microsecondsSinceEpoch int64 =
-	    ts.Seconds * 1_000_000 + int64(ts.Nanos) / 1000
+		ts.Seconds * 1_000_000 + int64(ts.Nanos) / 1000
 
 	return driver.Value(microsecondsSinceEpoch), nil
 }`
@@ -207,6 +211,50 @@ func fromTimestamp(source *timestamp.Timestamp) timestampValuer {
 // naming convention.
 func fromDate(source *date.Date) dateValuer {
 	return dateValuer{source}
+}`
+            }
+        ]
+    },
+
+    // If a query fails, we return the error. But first, we have to rollback
+    // the transaction. But _that_ can fail. So, if both the query and the
+    // rollback fail, we combine the two errors into one and return the
+    // resulting `CompositeError`. The generated code creates a
+    // `CompositeError` by calling the `combineErrors` function.
+    combineErrors: {
+        imports: {
+            'strings': null
+        },
+        declarations: [
+            {raw: `type CompositeError []error`},
+            {raw:
+`func (errs CompositeError) Error() string {
+	if len(errs) == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	i := 0
+	builder.WriteString(errs[i].Error())
+
+	for i++; i < len(errs); i++ {
+		builder.WriteString("\\n")
+		builder.WriteString(errs[i].Error())
+	}
+
+	return builder.String()
+}`
+            },
+            {raw:
+`func combineErrors(errs ...error) CompositeError {
+	var filtered []error
+	for _, err := range errs {
+		if err != nil {
+			filtered = append(filtered, err)
+		}
+	}
+
+	return CompositeError(filtered)
 }`
             }
         ]

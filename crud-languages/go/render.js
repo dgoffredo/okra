@@ -1,4 +1,6 @@
-// TODO: document
+// This module provides a function, `renderFile`, that takes the AST describing
+// a file of Go code (see `ast.tisch.js`), and returns a string containing Go
+// source code.
 define(['../../dependencies/tisch/tisch'], function (tisch) {
 
 const isGoFileAst = tisch.compileFile(`${__dirname}/ast.tisch.js`);
@@ -16,6 +18,11 @@ function linePrinter({lines=[], indentLevel=0, tab='\t'}={}) {
             return lines.join('\n');
         }
     };
+}
+
+// Render each line of the specified `text` string as a line comment.
+function renderDocumentation(text, lines) {
+    lines.push(...text.split('\n').map(line => `// ${line}`))
 }
 
 function stringifyExpression(expression) {
@@ -55,8 +62,16 @@ function stringifyExpression(expression) {
     else if (expression.address) {
         return `&${stringifyExpression(expression.address)}`;
     }
+    else if (expression.equal) {
+        const {left, right} = expression.equal;
+        return [left, right].map(stringifyExpression).join(' == ');
+    }
+    else if (expression.notEqual) {
+        const {left, right} = expression.notEqual;
+        return [left, right].map(stringifyExpression).join(' != ');
+    }
     else {
-        throw Error(`Invalid AST expression: ${expression}`);
+        throw Error(`Invalid AST expression: ${JSON.stringify(expression)}`);
     }
 }
 
@@ -94,9 +109,9 @@ function renderVariable({name, type, value}, lines) {
     }
 }
 
-function stringifyAssignment({left: leftVars, right: rightExpr}) {
+function stringifyAssignment({left: leftVars, right: rightExprs}) {
     const leftHandSide = leftVars.join(', ');
-    const rightHandSide = stringifyExpression(rightExpr);
+    const rightHandSide = rightExprs.map(stringifyExpression).join(', ');
     return `${leftHandSide} = ${rightHandSide}`;
 }
 
@@ -139,6 +154,7 @@ function renderStatement(statement, lines) {
 function renderFunction(func, lines) {
     // See `ast.tisch.js` for the shapes of `arguments`, `variables`, etc.
     const {
+        documentation,
         name,
         arguments,
         results,
@@ -147,6 +163,10 @@ function renderFunction(func, lines) {
             statements
         }
     } = func;
+
+    if (documentation !== undefined) {
+        renderDocumentation(documentation, lines);
+    }
 
     // func $name($arguments) $results {
     //     $variables
@@ -172,6 +192,10 @@ function renderFunction(func, lines) {
 function renderFile(goFile, lines) {
     isGoFileAst.enforce(goFile);
 
+    if ('documentation' in goFile) {
+        renderDocumentation(goFile.documentation, lines);
+    }
+
     // package foo
     lines.push(`package ${goFile.package}`);
 
@@ -179,7 +203,7 @@ function renderFile(goFile, lines) {
     //     thing "path/to/thing/package"
     //     "some/other/package"
     // )
-    if (goFile.imports.length > 0) {
+    if (Object.keys(goFile.imports).length > 0) {
         lines.push('');
         lines.push('import (');
         lines.indented().push(...Object.keys(goFile.imports).sort().map(package => {

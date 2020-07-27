@@ -46,7 +46,16 @@
         dot,
         
         // &foo
-        {'address': expression}));
+        {'address': expression},
+        
+        // $left == $right
+        {'equal': {'left': expression, 'right': expression}},
+
+        // $left != $right
+        {'notEqual': {'left': expression, 'right': expression}},
+
+        // $left && $right
+        {'and': {'left': expression, 'right': expression}}));
 
     const statement = recursive(statement => or(
         // see `expression`, defined above
@@ -55,7 +64,7 @@
         // $left = $right
         {'assignment': {
             'left': [String, ...etc], // variable names
-            'right': expression
+            'right': [expression, ...etc]
         }},
 
         // if $condition {
@@ -79,6 +88,7 @@
         {'return': [expression, ...etc]}));
 
     const file = {
+        'documentation?': String, // commented per-line
         'package': String, // the name of the package
         'imports': {
             // The keys are full package name, e.g. "google/protobuf/timestamp"
@@ -91,6 +101,7 @@
             //     $body
             // }
             'function': {
+                'documentation?': String, // commented per-line
                 'name': String,
                 'arguments': [{'name?': String, 'type': String}, ...etc],
                 'results': [{'name?': String, 'type': String}, ...etc],

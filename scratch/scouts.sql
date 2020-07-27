@@ -18,6 +18,8 @@ create table `boy_scout`(
     `language_code` longtext null comment 'ISO 639-1 two-character lower-case',
     `pack_code` int unsigned null comment 'as administered by the Head Wolf',
     `rank` int null,
+    `iana_country_code` longtext null comment 'playing with naming conventions',
+    `what_about_this` bigint null,
     primary key (`id`),
     foreign key (`rank`) references `rank`(`id`))
 engine = InnoDB

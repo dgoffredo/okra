@@ -21,6 +21,10 @@ message BoyScout {
     Rank rank = 5;
     repeated Badge badges = 8;
     repeated string favorite_songs = 9; // formatted as  "Artist Name - Song Title"
+
+    // playing with naming conventions
+    string IANA_country_code = 12;
+    int64 whatAboutThis = 13;
 }
 
 enum Rank {

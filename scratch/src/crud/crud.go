@@ -226,6 +226,45 @@ func DeleteBoyScout(ctx context.Context, db *sql.DB, id string) error {
 	return nil
 }
 
+type CompositeError []error
+
+func (errs CompositeError) Error() string {
+	if len(errs) == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	i := 0
+	builder.WriteString(errs[i].Error())
+
+    for i++; i < len(errs); i++ {
+		builder.WriteString("\n")
+		builder.WriteString(errs[i].Error())
+	}
+
+	return builder.String()
+}
+
+func combineErrors(errs ...error) CompositeError {
+	var filtered []error
+	for _, err := range errs {
+		if err != nil {
+			filtered = append(filtered, err)
+		}
+	}
+
+	return CompositeError(filtered)
+}
+
+type MyEnum int32
+
+const (
+	MyEnum_MYENUM_UNSET MyEnum = 0
+	MyEnum_MYENUM_RED MyEnum = 1
+	MyEnum_MYENUM_GREEN MyEnum = 2
+	MyEnum_MYENUM_BLUE MyEnum = 3
+)
+
 func DoTheThing() {
 	// err := UpdateBoyScout(context.TODO(), dbConn(), pb.BoyScout{}, []string{})
 	// fmt.Println("err:", err)
@@ -283,6 +322,14 @@ func DoTheThing() {
 	fmt.Println("scout.Birthdate:", scout.Birthdate)
 
 	fmt.Println(withTuples("insert into `foo`(`x`, `y`) values", "(?, ?)", 10))
+
+	// The fact that this works makes dealing with proto enums easy.
+	var color MyEnum
+	err = transaction.QueryRow("select 25;").Scan(&color)
+	fmt.Println("returned: ", err)
+	fmt.Println("color:", color)
+
+	fmt.Println(combineErrors(fmt.Errorf("hi"), fmt.Errorf("there")))
 	
 	transaction.Commit() // TODO: returns error
 }
