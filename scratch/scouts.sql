@@ -51,6 +51,15 @@ engine = InnoDB
 character set utf8mb4
 comment = 'formatted as  "Artist Name - Song Title"';
 
+create table `boy_scout_camping_trips`(
+    `id` varchar(255) not null comment 'id of the relevant .scouts.BoyScout',
+    `value` date null comment 'one of the camping_trips in some .scouts.BoyScout',
+    foreign key (`id`) references `boy_scout`(`id`),
+    index (`id`))
+engine = InnoDB
+character set utf8mb4
+comment = 'do we end up with an array of pointers?';
+
 insert into `rank` (`id`, `name`, `description`) values
 (0, 'RANK_UNKNOWN', null),
 (1, 'RANK_WEBELOS', null),

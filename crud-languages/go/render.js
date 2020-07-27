@@ -22,10 +22,21 @@ function linePrinter({lines=[], indentLevel=0, tab='\t'}={}) {
 
 // Render each line of the specified `text` string as a line comment.
 function renderDocumentation(text, lines) {
-    lines.push(...text.split('\n').map(line => `// ${line}`))
+    lines.push(...text.split('\n').map(line => `// ${line}`.trimRight()))
+}
+
+function isObject(value) {
+    // Good enough. Google "javascript check if object is object literal."
+    return value !== null &&
+        Object.prototype.toString.call(value) === '[object Object]';
 }
 
 function stringifyExpression(expression) {
+    // TODO: Need to determine when to parenthesize expressions. Right now the
+    // code doesn't bother, except for the "not" operator ("!"). An alternative
+    // is to put parentheses almost everywhere, but yuck. For now this renderer
+    // can produce Go code that does not reflect the AST, due to lack of
+    // parentheses. Keep that in mind.
     if (expression === null) {
         return 'nil';
     }
@@ -70,6 +81,22 @@ function stringifyExpression(expression) {
         const {left, right} = expression.notEqual;
         return [left, right].map(stringifyExpression).join(' != ');
     }
+    else if (expression.and) {
+        const {left, right} = expression.and;
+        return [left, right].map(stringifyExpression).join(' && ');
+    }
+    else if (expression.not) {
+        const argument = expression.not;
+        // We might need to put parentheses around `argument`; it depends.
+        // Let's be conservative and say that symbols, calls, and primitives
+        // are fine, but everything else needs parentheses.
+        if (!isObject(argument) || argument.symbol || argument.call) {
+            return `!${stringifyExpression(argument)}`;
+        }
+        else {
+            return `!(${stringifyExpression(argument)})`;
+        }
+    }
     else {
         throw Error(`Invalid AST expression: ${JSON.stringify(expression)}`);
     }
@@ -109,8 +136,20 @@ function renderVariable({name, type, value}, lines) {
     }
 }
 
-function stringifyAssignment({left: leftVars, right: rightExprs}) {
-    const leftHandSide = leftVars.join(', ');
+function stringifyAssign({left: leftVars, right: rightExprs}) {
+    // The left-hand side is `or(dot, String)`. `String` is a shorthand for a
+    // symbol, rather than a string literal. So, we can't just pass it to
+    // `stringifyExpression`.
+    const leftHandSide = leftVars.map(lvalue => {
+        if (typeof lvalue === 'string') {
+            return lvalue;
+        }
+        else {
+            // It's a {dot: ...}.
+            return stringifyExpression(lvalue);
+        }
+    }).join(', ');
+
     const rightHandSide = rightExprs.map(stringifyExpression).join(', ');
     return `${leftHandSide} = ${rightHandSide}`;
 }
@@ -129,13 +168,25 @@ function renderRangeFor({variables, sequence, body}, lines) {
     lines.push('}');
 }
 
+function renderConditionFor({condition, body}, lines) {
+    lines.push(`for ${stringifyExpression(condition)} {`);
+    body.forEach(statement =>
+        renderStatement(statement, lines.indented()));
+    lines.push('}');
+}
+
 function stringifyReturn(expressions) {
-    return `return ${expressions.map(stringifyExpression).join(', ')}`;
+    if (expressions.length === 0) {
+        return `return`;
+    }
+    else {
+        return `return ${expressions.map(stringifyExpression).join(', ')}`;
+    }
 }
 
 function renderStatement(statement, lines) {
-    if (statement.assignment) {
-        lines.push(stringifyAssignment(statement.assignment));
+    if (statement.assign) {
+        lines.push(stringifyAssign(statement.assign));
     }
     else if (statement.if) {
         renderIf(statement.if, lines);
@@ -143,8 +194,17 @@ function renderStatement(statement, lines) {
     else if (statement.rangeFor) {
         renderRangeFor(statement.rangeFor, lines);
     }
+    else if (statement.conditionFor) {
+        renderConditionFor(statement.conditionFor, lines);
+    }
     else if (statement.return) {
-        stringifyReturn(statement.return);
+        lines.push(stringifyReturn(statement.return));
+    }
+    else if (statement.spacer) {
+        lines.push(...Array(statement.spacer).fill(''));
+    }
+    else if (statement.variable) {
+        renderVariable(statement.variable, lines);
     }
     else {
         lines.push(stringifyExpression(statement));

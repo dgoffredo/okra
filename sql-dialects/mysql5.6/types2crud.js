@@ -139,10 +139,9 @@ function instructionSelectArray({
     return {
         instruction: 'query',
 
-        // It's important that we select only the `value` column. Or, at the
-        // very least, the `value` column has to be the first column selected,
-        // so that the generated code then knows which column in the result set
-        // to use as a value in the array field.
+        // It's important that we select only the `value` column, so that the
+        // generated code then knows that the result set has only one column,
+        // and to put its value into the array field.
         sql: sqline(`select ${selector({columnName: 'value', fieldType: arrayType.array})}
                 from ${quoteName(arrayTableName)}
                 where ${quoteName('id')} = ${parameter(messageIdFieldType)};`),

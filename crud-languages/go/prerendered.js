@@ -91,11 +91,11 @@ func intoTimestamp(destination **timestamp.Timestamp) timestampScanner {
             "fmt": null,
             "google.golang.org/genproto/googleapis/type/date": null
         },
-        declaration: [
+        declarations: [
             {raw:
 `type dateScanner struct {
 	intermediary sql.NullString // YYYY-MM-DD
-    destination **date.Date
+	destination **date.Date
 }`
             },
             {raw:
