@@ -101,7 +101,7 @@ It is, truly, the thingest thing of all things.`,
         },
         field2type: function (field) {
             return {
-                id_my_favorite_sandwich: '.google.type.Date',
+                id_my_favorite_sandwich: {builtin: '.google.type.Date'},
                 name: {builtin: 'TYPE_STRING'}
             }[field];
         },
@@ -127,6 +127,25 @@ It is, truly, the thingest thing of all things.`,
             func.body.variables.push({name, type: goType}); // TODO: dupes
             return name;
         },
+    }));
+
+    func.body.statements.push({spacer: 1});
+
+    func.body.statements.push(...performExec({
+        instruction: {
+            instruction: 'exec',
+            sql: "delete from `thing` where ? and `id` = ?;",
+            parameters: [{included: 'id'}, {field: 'id'}],
+            condition: {included: 'id'}
+        },
+        field2type: function (field) {
+            return {
+                'id': {builtin: 'TYPE_UINT64'}
+            }[field];
+        },
+        included: function (field) {
+            return true; // TODO
+        }
     }));
 
     // TODO: put these back. I removed them for smaller output.
@@ -159,7 +178,7 @@ function messageOrEnum2go(protoName) {
 // - {builtin: "TYPE_STRING"} → "string"
 // - {builtin: "name"} → "string"
 // - {enum: "Foo"} → "pb.Foo"
-// - {array: "TYPE_INT64"} → "[]int64"
+// - {array: {builtin: "TYPE_INT64"}} → "[]int64"
 // - {builtin: ".google.protobuf.Timestamp"} → "*timestamp.Timestamp"
 // - {array: {builtin: ".google.type.Date"}} → "[]*date.Date"
 //
@@ -238,6 +257,54 @@ const ifErrRollbackAndReturn = {
         ]
 }};
 
+// Return an array of Go AST expressions, one element for each of the specified
+// `parameters`, that can appear as input parameters to database methods like
+// `Query` and `Exec`. This code is common to relevant CRUD instructions.
+function inputParameters2expressions({
+    // array of input parameters, per `ast.tisch.js`
+    parameters,
+
+    // function that maps a message field name to an okra type
+    field2type,
+
+    // function that returns an expression for whether a field is included in the CRUD operation
+    included
+}) {
+    return parameters.map(parameter => {
+        if (parameter.field) {
+            const type = field2type(parameter.field); // okra type
+            const member = field2go(parameter.field); // Go struct field name
+            if (type.builtin === '.google.protobuf.Timestamp') {
+                return {
+                    // fromTimestamp(message.someField)
+                    call: {
+                        function: 'fromTimestamp',
+                        arguments: [{dot: ['message', member]}]
+                    }
+                };
+            }
+            else if (type.builtin === '.google.type.Date') {
+                return {
+                    // fromDate(message.someField)
+                    call: {
+                        function: 'fromDate',
+                        arguments: [{dot: ['message', member]}]
+                    }
+                };
+            }
+            else {
+                // message.someField
+                return {dot: ['message', member]};
+            }
+        }
+        else {
+            // Instead of referencing a field value, we're asking whether the
+            // field is involved in the current operation.
+            return included(parameter.included);
+        }
+    });
+}
+
 // Return an array of statements that perform the specified CRUD "query"
 // `instruction` in the context implied by the other specified arguments.
 function performQuery({
@@ -272,38 +339,10 @@ function performQuery({
     //         return
     //     }
 
-    const parameters = instruction.parameters.map(parameter => {
-        if (parameter.field) {
-            const type = field2type(parameter.field); // okra type
-            const member = field2go(parameter.field); // Go struct field name
-            if (type.builtin === '.google.protobuf.Timestamp') {
-                return {
-                    // fromTimestamp(message.someField)
-                    call: {
-                        function: 'fromTimestamp',
-                        arguments: [{dot: ['message', member]}]
-                    }
-                };
-            }
-            else if (type.builtin === '.google.type.Date') {
-                return {
-                    // fromDate(message.someField)
-                    call: {
-                        function: 'fromDate',
-                        arguments: [{dot: ['message', member]}]
-                    }
-                };
-            }
-            else {
-                // message.someField
-                return {dot: ['message', member]};
-            }
-        }
-        else {
-            // Instead of referencing a field value, we're asking whether the
-            // field is involved in the current operation.
-            return included(parameter.included);
-        }
+    const parameters = inputParameters2expressions({
+        parameters: instruction.parameters,
+        field2type,
+        included
     });
 
     // The following code references this variable.
@@ -601,6 +640,87 @@ function performReadArray({
             ]
         }
     }];
+}
+
+// Return an array of statements that perform the specified CRUD "exec"
+// `instruction` in the context implied by the other specified arguments.
+function performExec({
+    // the "exec" CRUD instruction
+    instruction,
+
+    // function that maps a message field name to an okra type
+    field2type,
+
+    // function that registers a specified `variable({name, goType})` and returns `name`
+    // Note that that variables that are _assumed_ to be in scope, such as
+    // `ctx` and `transaction`, don't need to use this function. It's for
+    // variables like `rows` and `ok`.
+    // variable,
+    // NOTE: This instruction doesn't use any non-implicit variables.
+
+    // function that returns an expression for whether a field is included in the CRUD operation
+    included
+}) {
+    // Reminder of the shape of a "exec" instruction:
+    //
+    //    {
+    //        'instruction': 'exec',
+    //        'condition?': {'included': String},
+    //        'sql': String,
+    //        'parameters': [inputParameter, ...etc]
+    //    }
+    
+    // Here's what we're going for
+    //
+    //     _, err = transaction.ExecContext(ctx, $query, $parameters ...)
+    //     if err != nil {
+    //         err = combineErrors(err, tx.rollback())
+    //         return
+    //     }
+    //
+    // or, if there's a "condition," wrap the above in an `if` statement.
+
+    const parameters = inputParameters2expressions({
+        parameters: instruction.parameters,
+        field2type,
+        included
+    });
+
+    // If there's a condition, we'll wrap all of this in an `if`.
+    const statements = [
+        // _, err = transaction.ExecContext(ctx, $sql, $parameters ...)
+        {assign: {
+            left: ['_', 'err'],
+            right: [{
+                call: {
+                    function: {dot: ['transaction', 'ExecContext']},
+                    arguments: [
+                        {symbol: 'ctx'},
+                        instruction.sql,
+                        ...parameters
+                    ]
+                }
+            }]
+        }},
+
+        // if err != nil {
+        //     err = combineErrors(err, tx.rollback())
+        //     return
+        // }
+        ifErrRollbackAndReturn
+    ];
+
+    if ('condition' in instruction) {
+        return [{
+            if: {
+                condition: included(instruction.condition.included),
+                body: statements
+            }
+        }];
+    }
+    else {
+        return statements;
+    }
 }
 
 function isObject(value) {
