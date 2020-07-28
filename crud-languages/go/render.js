@@ -243,7 +243,7 @@ function renderFunction(func, lines) {
     // }
     const resultTuple = results.length === 0
         ? ''
-        : `(${resultTuple.map(stringifyArgument).join(', ')}) `; // +extra space 
+        : `(${results.map(stringifyArgument).join(', ')}) `; // +extra space 
 
     lines.push(`func ${name}(${arguments.map(stringifyArgument).join(', ')}) ${resultTuple}{`);
     variables.forEach(variable => renderVariable(variable, lines.indented()));
@@ -263,6 +263,7 @@ function renderFile(goFile, lines) {
 
     if ('documentation' in goFile) {
         renderDocumentation(goFile.documentation, lines);
+        lines.push('');
     }
 
     // package foo

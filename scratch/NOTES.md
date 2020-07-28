@@ -7,6 +7,33 @@ Notes
 - generate CRUD from proto(s)
     - compile/run on dev
 
+#### Command Line interface
+```console
+$ okra sql-new PROTOS ...
+create table blah(...)
+...
+
+$ okra sql-migrate REFSPEC PROTOS ...
+insert into foo(x, y) values(...)
+...
+
+$ okra go PROTOS ...
+package crud
+
+import (
+    ...
+
+$ okra python-json PROTOS ...
+"""create/read/update/delete proto-based database objects
+...
+"""
+
+import json
+...
+
+$ okra python-json --dialect sqlite
+```
+
 ### Deployment Workflow
 - propose pull request containing:
     - proto file(s) changes

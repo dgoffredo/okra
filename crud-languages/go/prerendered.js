@@ -152,7 +152,9 @@ func intoDate(destination **date.Date) dateScanner {
         },
         declarations: [
             {raw:
-`type timestampValuer struct {
+`// timestampValuer is a driver.Valuer that produces a numeric representation of a
+// timestamp.Timestamp (number of microseconds since the unix epoch).
+type timestampValuer struct {
 	source *timestamp.Timestamp
 }`
             },

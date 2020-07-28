@@ -15,13 +15,99 @@ define([
 // 'use strict';
 // SyntaxError: Illegal 'use strict' directive in function with non-simple parameter list
 
+function deepCopy(from) {
+    // JSON-compatible data only. What do you want?
+    return JSON.parse(JSON.stringify(from));
+}
+
+// Return an object
+//
+//     {
+//         protoImports: function () => {<full package>: <package alias>},
+//         typePackageAlias: function (<type name>) => <package alias>
+//     }
+//
+// where `.protoImports` is a function that returns package imports for the
+// protoc generated code of the specified `types` array, and
+// `.typePackageAlias` is a function that maps each name of the `types` to the
+// alias of the package in which that type is defined. Use the specified
+// `options` object of per-file protobuf options to associate types with Go
+// packages (using the `go_package` option). Note that the returned object is
+// stateful. Based on the type names passed to `.typePackageAlias` and on the
+// call order, the package aliases returned by `.typePackageAlias` and by
+// `.protoImports()` will differ (e.g. "a" -> "pb", "b" -> "pb2"; versus "b" ->
+// "pb", "a" -> "pb2").
+function typeImports({types, options}) {
+    // {<file>: <package>}
+    const packageByFile = Object.entries(options).reduce(
+        (packages, [file, fileOptions]) => {
+        // Protobuf JSONification changes the naming convention for fields, so
+        // it's `goPackage`, not `go_package`.
+        if (fileOptions.goPackage) {
+            // The `go_package` option supports special syntax:
+            // "some/real/name;alias" where the part after the semicolon can be
+            // different from the "name" part. We're interested in just the
+            // full package name itself, so omit any after-semicolon section.
+            const fullPackageName =
+                fileOptions.goPackage.split(';').slice(0, -1).join(';');
+            packages[file] = fullPackageName;
+        }
+        return packages;
+    }, {});
+
+    // {<type name>: <package>}
+    const packageByType = Object.values(types).reduce((byType, {file, name}) => {
+        if (file === undefined) {
+            throw Error(`Type named ${name} is not associated with a .proto ` +
+                `file, which means we can't deduce in which Go package to ` +
+                `find its generated Go code.`);
+        }
+        if (!(file in packageByFile)) {
+            throw Error(`Type named ${name} defined in proto file ${file}, ` +
+                `but that file does not declare a go_package option, so we ` +
+                `can't deduce in which Go package to find the type's ` +
+                `generated Go code.`);
+        }
+        byType[name] = packageByFile[file];
+        return byType;
+    }, {});
+
+    const packageAliases = {}; // {<package>: <alias>}
+
+    function typePackageAlias(typeName) {
+        const packageName = packageByType[typeName];
+        let alias = packageAliases[packageName];
+        if (alias !== undefined) {
+            return alias;
+        }
+
+        // Create a new alias. If it's the first one, call it "pb". If it's the
+        // second one, call it "pb2", etc.
+        const numMentionedPackages = Object.keys(packageAliases).length;
+        if (numMentionedPackages === 0) {
+            alias = 'pb';
+        }
+        else {
+            alias = `pb${numMentionedPackages + 1}`;
+        }
+
+        packageAliases[packageName] = alias;
+        return alias;
+    }
+
+    function protoImports() {
+        return deepCopy(packageAliases);
+    }
+
+    return {protoImports, typePackageAlias};
+}
+
 // Return a string of Go source code for a module that implements the CRUD
 // operations indicated by the specified arguments:
 // - `crud`: an object as produced by some SQL dialect's `types2crud` function
 // - `types`: an array of Okra types
 // - `options`: an object of proto file options (by file)
 function generate({crud, types, options}) {
-    /* TODO: hack hack
     // Verify that the arguments have the expected shape.
     // - `crud`
     schemas.crud.enforce(crud);
@@ -34,162 +120,205 @@ function generate({crud, types, options}) {
         ...etc
     })).enforce(options);
 
+    const {protoImports, typePackageAlias} = typeImports({types, options});
+    const messages = types.filter(type => type.kind === 'message');
+
     // Make `types` an object by-name rather than just an array.
     types = Object.fromEntries(types.map(type => [type.name, type]));
-    TODO: end hack hack*/
 
-    // TODO: hack hack
-    const func = {
-        documentation: 'Foo does the thing.',
-        name: 'Foo',
-        arguments: [],
-        results: [],
-        body: {
-            variables: [],
-            statements: []
-        }
-    };
+    const documentation =
+`Package crud provides create/read/update/delete (CRUD) database operations
+for protobol buffer message types.
+
+This file is generated code. Please do not modify it by hand.`;
 
     const goFile = {
-        documentation: 
-`This is a thing it does a thing.
-
-You will never believe how thingy this thing is. It is simply the best thing
-that a thing has ever thinged.
-
-Things go way back. Back to the beginning of things. But always there was
-this thing.
-
-It is, truly, the thingest thing of all things.`,
+        documentation,
         package: 'crud',
-        imports: {}, // TODO: from go_package option per file (yikes what about aliases)
-        declarations: [
-            {function: func}
-        ]
+        imports: {}, // will be added to based on the declarations
+        declarations: messages.map(message => [
+            funcCreate({
+                typeName: message.name,
+                instructions: crud[message.name].create,
+                types, 
+                typePackageAlias
+            }),
+            // funcRead(message, TODO),
+            // funcUpdate(message, TODO),
+            // funcDelete(message, TODO)
+        ]).flat()
     };
 
-    func.body.statements.push(...performQuery({
-        instruction: {
-            instruction: 'query',
-            sql: "select `id`, `name` from person where `id` = ?;",
-            parameters: [{field: 'id_my_favorite_sandwich'}]
-        },
-        field2type: function (field) {
-            return {
-                id_my_favorite_sandwich: {builtin: '.google.type.Date'},
-                name: {builtin: 'TYPE_STRING'}
-            }[field];
-        },
-        variable: function ({name, goType}) {
-            func.body.variables.push({name, type: goType}); // TODO: dupes
-            return name;
-        },
-        included: function (field) {
-            return true;
-        }
-    }));
+    // Calls to `typePackageAlias` have been helping decide which
+    // protobuf-generated Go modules need to be imported and what to call them.
+    // `protoImports()` is the result.
+    Object.assign(goFile.imports, protoImports());
 
-    func.body.statements.push({spacer: 1});
-
-    func.body.statements.push(...performReadRow({
-        instruction: {
-            instruction: 'read-row',
-            destinations: [
-                {field: 'id_my_favorite_sandwich'},
-                {field: 'name'}
-            ],
-        },
-        field2type: function (field) {
-            return {
-                id_my_favorite_sandwich: {builtin: '.google.type.Date'},
-                name: {builtin: 'TYPE_STRING'}
-            }[field];
-        },
-        variable: function ({name, goType}) {
-            func.body.variables.push({name, type: goType}); // TODO: dupes
-            return name;
-        },
-    }));
-
-    func.body.statements.push({spacer: 1});
-
-    func.body.statements.push(...performReadArray({
-        instruction: {
-            instruction: 'read-array',
-            destination: {field: 'dates'}
-        },
-        field2type: function (field) {
-            return {
-                'dates': {array: {builtin: '.google.type.Date'}}
-            }[field];
-        },
-        variable: function ({name, goType}) {
-            func.body.variables.push({name, type: goType}); // TODO: dupes
-            return name;
-        },
-    }));
-
-    func.body.statements.push({spacer: 1});
-
-    func.body.statements.push(...performExec({
-        instruction: {
-            instruction: 'exec',
-            sql: "delete from `thing` where ? and `id` = ?;",
-            parameters: [{included: 'id'}, {field: 'id'}],
-            condition: {included: 'id'}
-        },
-        field2type: function (field) {
-            return {
-                'id': {builtin: 'TYPE_UINT64'}
-            }[field];
-        },
-        included: function (field) {
-            return true; // TODO
-        }
-    }));
-
-    func.body.statements.push({spacer: 1});
-
-    func.body.statements.push(...performExecWithTuples({
-        instruction: {
-            instruction: 'exec-with-tuples',
-            sql: "insert into `the_thing`(`id`, `chicken`) values",
-            tuple: "(?, ?)",
-            parameters: [
-                {field: 'id'},
-                {field: 'everybodys_favorite_chickens'}
-            ],
-            condition: {
-                included: 'everybodys_favorite_chickens'
-            }
-        },
-        field2type: function (field) {
-            return {
-                'id': {builtin: '.google.protobuf.Timestamp'},
-                'everybodys_favorite_chickens': {
-                    array: {
-                        enum: 'Chicken'
-                    }
-                }
-            }[field];
-        },
-        included: function (field) {
-            return true;
-        },
-        variable: function ({name, goType}) {
-            func.body.variables.push({name, type: goType}); // TODO: dupes
-            return name;
-        },
-    }));
-
+    // If the functions in `goFile` referenced utility functions, like those
+    // used to convert dates and timestamps to/from okra's custom formats,
+    // include the definitions of those functions.
     includePrerendered(goFile);
+
+    // Look for references to standard packages, like "fmt," and import them if
+    // they aren't already.
     includeStandardImports(goFile);
 
-    console.log(JSON.stringify(goFile, undefined, 4));
+    // TODO: debug
+    // console.log(JSON.stringify(goFile, undefined, 4));
 
     return renderFile(goFile);
 }
 
+// Return a Go AST node representing a func that creates a new instance of a
+// message of the specified `typeName` in the database using the specified CRUD
+// `instructions`. Use the specified `types` object of okra types by name to
+// inspect the message type and any enum types that it might depend upon. Use
+// the specified `typePackageAlias` function to look up which package aliases
+// (e.g. "pb", "p2") a given message/enum type belongs to.
+function funcCreate({typeName, instructions, types, typePackageAlias}) {
+    // Here's a reminder of what a function (func) looks like:
+    //
+    //     {'function': {
+    //          'documentation?': String,
+    //          'name': String,
+    //          'arguments': [{'name?': String, 'type': String}, ...etc],
+    //          'results': [{'name?': String, 'type': String}, ...etc],
+    //          'body': {
+    //              'variables': [variable, ...etc],
+    //              'statements': [statement, ...etc]
+    //          }}}
+
+    // Here's what we're going for:
+    //
+    //     // CreateFooBar adds the specified message to the specified db subject to
+    //     // the specified cancellation context ctx. Return nil on success, or return
+    //     // a non-nil value if an error occurs.
+    //     func CreateFooBar(ctx context.Context, db *sql.DB, message pb.FooBar) (err error) {
+    //         transaction, err = db.BeginTx(ctx, nil)
+    //         if err != nil {
+    //             return
+    //         }
+    //
+    //         ... all the instructions ...
+    //
+    //         err = transaction.Commit()
+    //         return
+    //     }
+
+    const funcName = `Create${messageOrEnum2go(typeName)}`;
+    const documentation =
+`${funcName} adds the specified message to the specified db subject to the
+specified cancellation context ctx. Return nil on success, or return a
+non-nil value if an error occurs.`;
+    const arguments = [
+        {name: 'ctx', type: 'context.Context'},
+        {name: 'db', type: '*sql.DB'},
+        {name: 'message',
+         type: `${typePackageAlias(typeName)}.${messageOrEnum2go(typeName)}`}
+    ];
+    const results = [{name: 'err', type: 'error'}];
+    const variables = [{name: 'transaction', type: '*sql.Tx'}];
+    const func = {
+        documentation,
+        name: funcName,
+        arguments,
+        results,
+        body: {
+            variables,
+            // Begin by starting a transaction. We'll fill out the rest later.
+            statements: [
+                // transaction, err = db.BeginTx(ctx, nil)
+                {assign: {
+                    left: ['transaction', 'err'],
+                    right: [{call: {
+                        function: {dot: ['db', 'BeginTx']},
+                        arguments: [{symbol: 'ctx'}, null]
+                    }}]
+                }},
+
+                // if err != nil {
+                //     return
+                // }
+                {if: {
+                    condition: {notEqual: {
+                        left: {symbol: 'err'},
+                        right: null
+                    }},
+                    body: [{return: []}]
+                }},
+
+                //
+                {spacer: 1}
+            ]
+        }
+    };
+
+    // Define the functions needed by the instruction handlers.
+
+    // field2type :: <fieldName> -> <okra type>
+    const field2type = (function () {
+        const fieldTypeByFieldName = types[typeName].fields.reduce(
+            (byName, {name, type}) => Object.assign(byName, {[name]: type}),
+            {});
+
+        return function (fieldName) {
+            return fieldTypeByFieldName[fieldName];
+        };
+    }());
+
+    // variable({name, goType}) adds the variable with the specified name and
+    // having the specified type to the func's variable declarations section if
+    // it hasn't been added already, and returns the name of the variable.
+    const variable = (function () {
+        const alreadyDeclared = {};
+
+        return function({name, goType}) {
+            if (name in alreadyDeclared) {
+                return name;
+            }
+
+            // This is the first time we've seen this variable. Add it to the
+            // func's variable declarations.
+            variables.push({name, type: goType});
+            alreadyDeclared[name] = true;
+            return name;
+        };
+    }());
+
+    // In a "create" func, all fields are "included," so this always returns
+    // `true`.
+    function included(fieldName /*ignored*/) {
+        return true;
+    }
+
+    // Generate statements that implement each instruction, and append the
+    // statements to the body of the func.
+    func.body.statements.push(...performInstructions({
+        instructions,
+        field2type,
+        variable,
+        included,
+        typePackageAlias
+    }));
+
+    // Commit the transaction and return.
+    func.body.statements.push(
+        // err = transaction.Commit()
+        {assign: {
+            left: ['err'],
+            right: [{
+                call: {
+                    function: {dot: ['transaction', 'Commit']},
+                    arguments: []
+                }
+            }]
+        }},
+
+        // return
+        {return: []});
+
+    return {function: func};
+}
 
 // Return the Go struct field name that would be generated for the specified
 // `protoFieldName`. The convention for protobuf message fields is to use
@@ -202,29 +331,39 @@ function field2go(protoFieldName) {
 // Return the Go struct or enum type name that would be generated for the specified
 // `protoName`, where `protoName` is the name of a protobuf message or enum.
 function messageOrEnum2go(protoName) {
-    return names.normalize(protoName, 'TitleCamelCase');
+    // `basename` e.g. ".foo.bar.Baz" -> "Baz"
+    const basename = protoName.split('.').slice(-1)[0];
+
+    return names.normalize(basename, 'TitleCamelCase');
 }
 
 // Return a string containing the Go spelling for the type corresponding to the
-// specified `okraType`. For example:
+// specified `okraType`. Use the specified `typePackageAlias` function to
+// determine Go package, if necessary.
 //
+// For example:
 // - {builtin: "TYPE_STRING"} → "string"
 // - {builtin: "name"} → "string"
-// - {enum: "Foo"} → "pb.Foo"
+// - {enum: "Foo"} → "pb.Foo" (or "pb7.Foo" depending on `typePackageAlias`)
 // - {array: {builtin: "TYPE_INT64"}} → "[]int64"
 // - {builtin: ".google.protobuf.Timestamp"} → "*timestamp.Timestamp"
 // - {array: {builtin: ".google.type.Date"}} → "[]*date.Date"
 //
-// TODO: This assumes that all enum types are in package alias `pb`. This will 
-// not be true in general, which means that this will have to be messier.
-function type2go(okraType) {
+function type2go({
+    // e.g. `{builtin: 'TYPE_STRING'}`, or `{array: {enum: '.Foo'}}`
+    okraType,
+
+    // function that maps message/enum type name to a Go package alias
+    typePackageAlias
+}) {
     if (okraType.array) {
-        return `[]${type2go(okraType.array)}`;
+        return `[]${type2go({okraType: okraType.array, typePackageAlias})}`;
     }
 
     if (okraType.enum) {
-        // TODO: see note at top of this function
-        return `pb.${messageOrEnum2go(okraType.enum)}`;
+        const enumName = messageOrEnum2go(okraType.enum);
+        const packageAlias = typePackageAlias(enumName);
+        return `${packageAlias}.${enumName}`;
     }
 
     // See `builtin.tisch.js`.
@@ -264,14 +403,14 @@ function type2go(okraType) {
 // The following snippet of Go AST occurs in a few places, so here it is once for reuse:
 //
 //     if err != nil {
-//         err = combineErrors(err, tx.rollback())
+//         err = combineErrors(err, transaction.Rollback())
 //         return
 //     }
 const ifErrRollbackAndReturn = {
     if: {
         condition: {notEqual: {left: {symbol: 'err'}, right: null}},
         body: [
-            // err = combineErrors(err, tx.rollback())
+            // err = combineErrors(err, transaction.Rollback())
             {assign: {
                 left: ['err'],
                 right: [{call: {
@@ -279,7 +418,7 @@ const ifErrRollbackAndReturn = {
                     arguments: [
                         {symbol: 'err'},
                         {call: {
-                            function: {dot: ['tx', 'rollback']},
+                            function: {dot: ['transaction', 'Rollback']},
                             arguments: []
                         }}
                     ]
@@ -344,6 +483,51 @@ function inputParameters2expressions({
         inputParameter2expression({parameter, field2type, included}));
 }
 
+// Return an array of statements that perform each of the specified
+// `instructions`, one after the other, in the context implied by the other
+// specified arguments.
+function performInstructions({
+    // array of CRUD instruction
+    instructions,
+
+    // function that maps a message field name to an okra type
+    field2type,
+
+    // function that registers a specified `variable({name, goType})` and returns `name`
+    // Note that that variables that are _assumed_ to be in scope, such as
+    // `ctx`, `message`, `transaction`, and `err`, don't need to use this
+    // function. It's for variables like `rows` and `ok`.
+    variable,
+
+    // function that returns an expression for whether a field is included in the CRUD operation
+    included,
+
+    // function that maps message/enum type name to a Go package alias
+    typePackageAlias
+}) {
+    const handlerByName = {
+        'query': performQuery,
+        'read-row': performReadRow,
+        'read-array': performReadArray,
+        'exec': performExec,
+        'exec-with-tuples': performExecWithTuples
+    };
+
+    return instructions.map(instruction => {
+        const statements = handlerByName[instruction.instruction]({
+            instruction,
+            field2type,
+            variable,
+            included,
+            typePackageAlias
+        });
+
+        // Append a blank line to separate from the next set of statements.
+        statements.push({spacer: 1});
+        return statements;
+    }).flat();
+}
+
 // Return an array of statements that perform the specified CRUD "query"
 // `instruction` in the context implied by the other specified arguments.
 function performQuery({
@@ -374,7 +558,7 @@ function performQuery({
     //
     //     rows, err = transaction.QueryContext(ctx, $query, $parameters ...)
     //     if err != nil {
-    //         err = combineErrors(err, tx.rollback())
+    //         err = combineErrors(err, transaction.Rollback())
     //         return
     //     }
 
@@ -404,7 +588,7 @@ function performQuery({
         }},
 
         // if err != nil {
-        //     err = combineErrors(err, tx.rollback())
+        //     err = combineErrors(err, transaction.Rollback())
         //     return
         // }
         ifErrRollbackAndReturn
@@ -446,13 +630,13 @@ function performReadRow({
     //     ok = rows.Next()
     //     if !ok {
     //         err = fmt.Errorf("Unable to read row from database. There is no row.")
-    //         err = combineErrors(err, tx.rollback())
+    //         err = combineErrors(err, transaction.Rollback())
     //         return
     //     }
     //     
     //     err = rows.Scan($destinations)
     //     if err != nil {
-    //         err = combineErrors(err, tx.rollback())
+    //         err = combineErrors(err, transaction.Rollback())
     //         return
     //     }
 
@@ -501,7 +685,7 @@ function performReadRow({
 
         // if !ok {
         //     err = fmt.Errorf("Unable to read row from database. There is no row.")
-        //     err = combineErrors(err, tx.rollback())
+        //     err = combineErrors(err, transaction.Rollback())
         //     return
         // }
         {if: {
@@ -526,7 +710,7 @@ function performReadRow({
                             arguments: [
                                 {symbol: 'err'},
                                 {call: {
-                                    function: {dot: ['tx', 'rollback']},
+                                    function: {dot: ['transaction', 'Rollback']},
                                     arguments: []
                                 }}
                             ]
@@ -552,7 +736,7 @@ function performReadRow({
         }},
 
         // if err != nil {
-        //     err = combineErrors(err, tx.rollback())
+        //     err = combineErrors(err, transaction.Rollback())
         //     return
         // }
         ifErrRollbackAndReturn
@@ -577,6 +761,9 @@ function performReadArray({
     // function that returns an expression for whether a field is included in the CRUD operation
     // included
     // NOTE: `included` is not used here. See the note in `performReadRow`.
+
+    // function that maps message/enum type name to a Go package alias
+    typePackageAlias
 }) {
     // Reminder of the shape of a "read-array" instruction:
     //
@@ -591,7 +778,7 @@ function performReadArray({
     //         var temp whateverGoType
     //         err = rows.Scan(&temp) // might use intoDate or intoTimestamp
     //         if err != nil {
-    //             err = combineErrors(err, tx.rollback())
+    //             err = combineErrors(err, transaction.Rollback())
     //             return
     //         }
     //         $destination = append($destination, temp)
@@ -642,7 +829,7 @@ function performReadArray({
                     name: 'temp',
                     // The destination is an array. We want an instance of
                     // an _element_ of the array.
-                    type: type2go(elementType)
+                    type: type2go({okraType: elementType, typePackageAlias})
                 }},
                 
                 // err = rows.Scan(&temp) // might use intoDate or intoTimestamp
@@ -657,7 +844,7 @@ function performReadArray({
                 }},
 
                 // if err != nil {
-                //     err = combineErrors(err, tx.rollback())
+                //     err = combineErrors(err, transaction.Rollback())
                 //     return
                 // }
                 ifErrRollbackAndReturn,
@@ -712,7 +899,7 @@ function performExec({
     //
     //     _, err = transaction.ExecContext(ctx, $query, $parameters ...)
     //     if err != nil {
-    //         err = combineErrors(err, tx.rollback())
+    //         err = combineErrors(err, transaction.Rollback())
     //         return
     //     }
     //
@@ -742,7 +929,7 @@ function performExec({
         }},
 
         // if err != nil {
-        //     err = combineErrors(err, tx.rollback())
+        //     err = combineErrors(err, transaction.Rollback())
         //     return
         // }
         ifErrRollbackAndReturn
@@ -817,7 +1004,7 @@ function performExecWithTuples({
     //             parameters...)
     //
     //         if err != nil {
-    //             err = combineErrors(err, tx.rollback())
+    //             err = combineErrors(err, transaction.Rollback())
     //             return
     //         }
     //     }
@@ -837,7 +1024,9 @@ function performExecWithTuples({
     // `condition` is what goes in the "if" condition.
     let condition;
     // $included && len($array) != 0
-    if ('condition' in instruction) {
+    if ('condition' in instruction &&
+        // if inclusion is hard-coded to true, then omit that part
+        included(instruction.condition.included) !== true) {
         condition = {
             and: {
                 left: included(instruction.condition.included),
@@ -934,7 +1123,7 @@ function performExecWithTuples({
                 }},
 
                 // if err != nil {
-                //     err = combineErrors(err, tx.rollback())
+                //     err = combineErrors(err, transaction.Rollback())
                 //     return
                 // }
                 ifErrRollbackAndReturn
