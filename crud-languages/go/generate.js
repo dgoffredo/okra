@@ -148,9 +148,42 @@ It is, truly, the thingest thing of all things.`,
         }
     }));
 
-    // TODO: put these back. I removed them for smaller output.
-    // includePrerendered(goFile);
-    // includeStandardImports(goFile);
+    func.body.statements.push({spacer: 1});
+
+    func.body.statements.push(...performExecWithTuples({
+        instruction: {
+            instruction: 'exec-with-tuples',
+            sql: "insert into `the_thing`(`id`, `chicken`) values",
+            tuple: "(?, ?)",
+            parameters: [
+                {field: 'id'},
+                {field: 'everybodys_favorite_chickens'}
+            ],
+            condition: {
+                included: 'everybodys_favorite_chickens'
+            }
+        },
+        field2type: function (field) {
+            return {
+                'id': {builtin: '.google.protobuf.Timestamp'},
+                'everybodys_favorite_chickens': {
+                    array: {
+                        enum: 'Chicken'
+                    }
+                }
+            }[field];
+        },
+        included: function (field) {
+            return true;
+        },
+        variable: function ({name, goType}) {
+            func.body.variables.push({name, type: goType}); // TODO: dupes
+            return name;
+        },
+    }));
+
+    includePrerendered(goFile);
+    includeStandardImports(goFile);
 
     console.log(JSON.stringify(goFile, undefined, 4));
 
@@ -222,7 +255,7 @@ function type2go(okraType) {
 // - `ctx` is the `context.Context` object describing the current cancellation
 //   context.
 // - `err` is the `error` variable to assign to before returning due to an
-// error.
+//   error.
 //
 // If an instruction encounters an error, it will assign to `err` and then
 // return using a `return` statement without any arguments. Thus the function
@@ -257,6 +290,43 @@ const ifErrRollbackAndReturn = {
         ]
 }};
 
+// Return an a Go AST expressions for the specified `parameter` that can appear
+// as input parameters to database methods like `Query` and `Exec`. This code
+// is common to relevant CRUD instructions.
+function inputParameter2expression({parameter, field2type, included}) {
+    if (parameter.field) {
+        const type = field2type(parameter.field); // okra type
+        const member = field2go(parameter.field); // Go struct field name
+        if (type.builtin === '.google.protobuf.Timestamp') {
+            return {
+                // fromTimestamp(message.someField)
+                call: {
+                    function: 'fromTimestamp',
+                    arguments: [{dot: ['message', member]}]
+                }
+            };
+        }
+        else if (type.builtin === '.google.type.Date') {
+            return {
+                // fromDate(message.someField)
+                call: {
+                    function: 'fromDate',
+                    arguments: [{dot: ['message', member]}]
+                }
+            };
+        }
+        else {
+            // message.someField
+            return {dot: ['message', member]};
+        }
+    }
+    else {
+        // Instead of referencing a field value, we're asking whether the
+        // field is involved in the current operation.
+        return included(parameter.included);
+    }
+}
+
 // Return an array of Go AST expressions, one element for each of the specified
 // `parameters`, that can appear as input parameters to database methods like
 // `Query` and `Exec`. This code is common to relevant CRUD instructions.
@@ -270,39 +340,8 @@ function inputParameters2expressions({
     // function that returns an expression for whether a field is included in the CRUD operation
     included
 }) {
-    return parameters.map(parameter => {
-        if (parameter.field) {
-            const type = field2type(parameter.field); // okra type
-            const member = field2go(parameter.field); // Go struct field name
-            if (type.builtin === '.google.protobuf.Timestamp') {
-                return {
-                    // fromTimestamp(message.someField)
-                    call: {
-                        function: 'fromTimestamp',
-                        arguments: [{dot: ['message', member]}]
-                    }
-                };
-            }
-            else if (type.builtin === '.google.type.Date') {
-                return {
-                    // fromDate(message.someField)
-                    call: {
-                        function: 'fromDate',
-                        arguments: [{dot: ['message', member]}]
-                    }
-                };
-            }
-            else {
-                // message.someField
-                return {dot: ['message', member]};
-            }
-        }
-        else {
-            // Instead of referencing a field value, we're asking whether the
-            // field is involved in the current operation.
-            return included(parameter.included);
-        }
-    });
+    return parameters.map(parameter => 
+        inputParameter2expression({parameter, field2type, included}));
 }
 
 // Return an array of statements that perform the specified CRUD "query"
@@ -520,7 +559,7 @@ function performReadRow({
     ];
 }
 
-// Return an array of statements that perform the specified CRUD "read-row"
+// Return an array of statements that perform the specified CRUD "read-array"
 // `instruction` in the context implied by the other specified arguments.
 function performReadArray({
     // the "read-array" CRUD instruction
@@ -562,7 +601,6 @@ function performReadArray({
     // `temp`. The expression that we pass to `rows.Scan` depends on the type
     // of the destination array. `intoTemp` is that expression.
     const elementType = field2type(instruction.destination.field).array;
-
     const intoTemp = (function () {
         // &temp
         const address = {address: {symbol: 'temp'}};
@@ -721,6 +759,188 @@ function performExec({
     else {
         return statements;
     }
+}
+
+// Return an array of statements that perform the specified CRUD "exec"
+// `instruction` in the context implied by the other specified arguments.
+function performExecWithTuples({
+    // the "exec-with-tuples" CRUD instruction
+    instruction,
+
+    // function that maps a message field name to an okra type
+    field2type,
+
+    // function that registers a specified `variable({name, goType})` and returns `name`
+    // Note that that variables that are _assumed_ to be in scope, such as
+    // `ctx` and `transaction`, don't need to use this function. It's for
+    // variables like `rows` and `ok`.
+    variable,
+
+    // function that returns an expression for whether a field is included in the CRUD operation
+    included
+}) {
+    // Verify that exactly one of the `instruction.parameters` has array type.
+    // Also, verify that all of the `instruction.parameters` have the shape
+    // `{field: ...}` (instead of `{included: ...}`).
+    instruction.parameters.forEach(parameter => {
+        if (!('field' in parameter)) {
+            throw Error(`Expected "exec-with-tuples" parameters to be of ` +
+                `{field: ...} kind, but encountered: ` +
+                `${JSON.stringify(parameter)} in instruction: ` +
+                JSON.stringify(instruction));
+        }
+    });
+
+    const arrays = instruction.parameters.filter(
+        parameter => field2type(parameter.field).array);
+
+    if (arrays.length !== 1) {
+        throw Error(`Expected "exec-with-tuples" parameters to contain ` +
+            `exactly one array-valued field, but found ${arrays.length}: ` +
+            JSON.stringify(arrays));
+    }
+
+    const [arrayField] = arrays.map(parameter => parameter.field);
+
+    // Here's what we're going for:
+    //
+    //     if $included && len($array) != 0 {
+    //         parameters = nil // clear the slice
+    //
+    //         for _, element := range message.$array {
+    //             parameters = append(parameters, [...], element, [...])
+    //         }
+    //
+    //         _, err = transaction.ExecContext(
+    //             ctx,
+    //             withTuples($sql, $tuple, len($array)),
+    //             parameters...)
+    //
+    //         if err != nil {
+    //             err = combineErrors(err, tx.rollback())
+    //             return
+    //         }
+    //     }
+
+    // The following code references this variable.
+    variable({name: 'parameters', goType: '[]interface{}'});
+
+    const arrayLengthExpression = {
+        call: {
+            function: 'len',
+            arguments: [
+                {dot: ['message', field2go(arrayField)]}
+            ]
+        }
+    };
+
+    // `condition` is what goes in the "if" condition.
+    let condition;
+    // $included && len($array) != 0
+    if ('condition' in instruction) {
+        condition = {
+            and: {
+                left: included(instruction.condition.included),
+                right: {notEqual: {
+                    left: arrayLengthExpression,
+                    right: 0}}
+            }
+        };
+    }
+    // len($array) != 0
+    else {
+        condition = {
+            notEqual: {
+                left: arrayLengthExpression,
+                right: 0
+            }
+        };
+    }
+
+    return [
+        // if $condition {
+        {if: {
+            condition: condition,
+            body: [
+                // parameters = nil
+                {assign: {
+                    left: ['parameters'],
+                    right: [null]
+                }},
+
+                // for _, element := range message.$array {
+                //     ...
+                // }
+                {rangeFor: {
+                    variables: ['_', 'element'],
+                    sequence: {dot: ['message', field2go(arrayField)]},
+                    body: [
+                        // parameters = append(parameters, [...], element, [...])
+                        {assign: {
+                            left: ['parameters'],
+                            right:  [{call: {
+                                function: 'append',
+                                arguments: [
+                                    {symbol: 'parameters'},
+                                    // The rest of the arguments to `append`
+                                    // correspond to the
+                                    // `instruction.parameters`. One of them
+                                    // will be `element` (the one array field),
+                                    // while the rest will be the other fields
+                                    // repeated again this time around the
+                                    // loop.
+                                    ...instruction.parameters.map(parameter => {
+                                        if (parameter.field === arrayField) {
+                                            return {symbol: 'element'};
+                                        }
+                                        else {
+                                            return inputParameter2expression({
+                                                parameter,
+                                                field2type,
+                                                included
+                                            });
+                                        }
+                                    })
+                                ]
+                            }}]
+                        }}
+                    ]
+                }},
+
+                // _, err = transaction.ExecContext(
+                //     ctx,
+                //     withTuples($sql, $tuple, len($array)),
+                //     parameters...)
+                {assign: {
+                    left: ['_', 'err'],
+                    right: [{
+                        call: {
+                            function: {dot: ['transaction', 'ExecContext']},
+                            arguments: [
+                                {symbol: 'ctx'},
+                                // withTuples($sql, $tuple, len($array))
+                                {call: {
+                                    function: 'withTuples',
+                                    arguments: [
+                                        instruction.sql,
+                                        instruction.tuple,
+                                        arrayLengthExpression 
+                                    ]
+                                }}
+                            ],
+                            rest: {symbol: 'parameters'}
+                        }
+                    }]
+                }},
+
+                // if err != nil {
+                //     err = combineErrors(err, tx.rollback())
+                //     return
+                // }
+                ifErrRollbackAndReturn
+            ]
+        }}
+    ];
 }
 
 function isObject(value) {

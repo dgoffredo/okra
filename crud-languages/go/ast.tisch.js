@@ -31,7 +31,10 @@
         // $function($arguments)
         {'call': {
             'function': or(String, dot),
-            'arguments': [expression, ...etc]
+            'arguments': [expression, ...etc],
+            // optional trailing variadic argument, e.g. `wakka` in
+            //     foo(bar, baz, wakka...)
+            'rest?': expression
         }},
 
         // $type{$elements}
@@ -88,7 +91,7 @@
         }},
 
         {'rangeFor': {
-            // for $variableName := range $sequence {
+            // for $variables := range $sequence {
             //     $body
             // }
             'variables': [String, ...etc],

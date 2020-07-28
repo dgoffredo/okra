@@ -31,6 +31,19 @@ function isObject(value) {
         Object.prototype.toString.call(value) === '[object Object]';
 }
 
+function stringifyCall({function: func, arguments, rest}) {
+    const funcStr = typeof func === 'string'
+        ? stringifyExpression({symbol: func})
+        : stringifyExpression(func); // it's a "dot," e.g. foo.bar.baz
+
+    const argStrings = arguments.map(stringifyExpression);
+    if (rest !== undefined) {
+        argStrings.push(`${stringifyExpression(rest)}...`);
+    }
+
+    return `${funcStr}(${argStrings.join(', ')})`;
+}
+
 function stringifyExpression(expression) {
     // TODO: Need to determine when to parenthesize expressions. Right now the
     // code doesn't bother, except for the "not" operator ("!"). An alternative
@@ -56,11 +69,7 @@ function stringifyExpression(expression) {
         return expression.symbol;
     }
     else if (expression.call) {
-        const {function: func, arguments} = expression.call;
-        const funcStr = typeof func === 'string'
-            ? stringifyExpression({symbol: func})
-            : stringifyExpression(func); // it's a "dot," e.g. foo.bar.baz
-        return `${funcStr}(${arguments.map(stringifyExpression).join(', ')})`;
+        return stringifyCall(expression.call);
     }
     else if (expression.slice) {
         const type = expression.slice.type || '';

@@ -191,7 +191,9 @@ func fromTimestamp(source *timestamp.Timestamp) timestampValuer {
         },
         declarations: [
             {raw:
-`type dateValuer struct {
+`// dateValuer is a driver.Valuer that produces a string representation of a
+// date.Date.
+type dateValuer struct {
 	source *date.Date
 }`
             },
@@ -226,7 +228,9 @@ func fromDate(source *date.Date) dateValuer {
             'strings': null
         },
         declarations: [
-            {raw: `type CompositeError []error`},
+            {raw: 
+`// CompositeError is an error type that contains zero or more error types.
+type CompositeError []error`},
             {raw:
 `func (errs CompositeError) Error() string {
 	if len(errs) == 0 {
@@ -255,6 +259,36 @@ func fromDate(source *date.Date) dateValuer {
 	}
 
 	return CompositeError(filtered)
+}`
+            }
+        ]
+    },
+
+    withTuples: {
+        imports: {
+            'strings': null
+        },
+        declarations: [
+            {raw:
+`// withTuples returns a string consisting of the specified sqlStatement
+// followed by the specified numTuples copies of the specified sqlTuple
+// separated by commas and spaces. numTuples must be greater than zero.
+func withTuples(sqlStatement string, sqlTuple string, numTuples int) string {
+	if numTuples < 1 {
+		panic(fmt.Sprintf("withTuples requires at least one tuple, but %d were specified",
+		    numTuples))
+	}
+
+	var builder strings.Builder
+	builder.WriteString(sqlStatement)
+	i := 0
+	builder.WriteString(sqlTuple)
+	for i++; i < numTuples; i++ {
+		builder.WriteString(", ")
+		builder.WriteString(sqlTuple)
+	}
+	
+	return builder.String()
 }`
             }
         ]
