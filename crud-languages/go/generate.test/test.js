@@ -16,31 +16,8 @@ const {generate} = require('../generate');
 // types2crud  -> {<type>: {<operation>: [<instruction>, ...]}}
 
 const {types, options} = proto2types({
-        // protoFiles :: [<.proto file path>, ...]
-        // These are the the paths to the protobuf schema files to compile.
         protoFiles: [__dirname + '/scouts.proto'],
-
-        // rootTypes :: [<type name>, ...]
-        // `proto2types` processes all message and enum types by default. To
-        // restrict the set of types that are converted into database tables,
-        // add fully-qualified type names to `rootTypes`. The types
-        // `rootTypes` and their descendents will be processed exclusively.
-        // rootTypes,
-
-        // protoIncludePaths :: [<path to directory>, ...]
-        // These are the directories to search for depended-upon protobuf
-        // schema files. The parent directories of the files in `protoFiles`
-        // are automatically included.
-        // protoIncludePaths = [],
-
-        // idFields :: {<type name>: <field name of object ID>}
-        // Message types eventually become tables whose primary key
-        // corresponds to the "id" field of the message type. `idFields`
-        // allows you to specify a different field instead (e.g. if there is no
-        // "id" field). The type names must be fully qualified, e.g. type "Foo"
-        // in package "lol.wut" is "lol.wut.Foo" or, equivalently (for this
-        // purpose), ".lol.wut.Foo".
-        // idFields = {}
+        // protoFiles: [__dirname + '/mini.proto'],
 });
 
 function print(what) {
@@ -75,6 +52,7 @@ const crud = types2crud(
         })));
 
 // print(crud);
+console.error(JSON.stringify(types, undefined, 4));
 
 const goFile = generate({crud, types, options});
 

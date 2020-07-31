@@ -302,7 +302,7 @@ function instructionsCreateMessage({type, legend}) {
     const fieldTypes = Object.fromEntries(
         type.fields.map(({name, type}) => [name, type]));
     const scalarFieldInfos = scalarFieldSources
-        .map(entry => ({...entry, fieldType: fieldTypes[entry.name]}));
+        .map(entry => ({...entry, fieldType: fieldTypes[entry.fieldName]}));
 
     return [
         // Insert a new row into the table of the message type, specifying
@@ -311,7 +311,7 @@ function instructionsCreateMessage({type, legend}) {
             instruction: 'exec',
             sql: sqline(`insert into ${quoteName(legend.tableName)}(
                 ${scalarFieldSources.map(({columnName}) => quoteName(columnName)).join(', ')})
-                values (${scalarFieldInfos.map(parameter).join(', ')});`),
+                values (${scalarFieldInfos.map(({fieldType}) => parameter(fieldType)).join(', ')});`),
             parameters: scalarFieldSources.map(({fieldName}) => ({field: fieldName}))
         },
 

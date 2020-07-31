@@ -135,7 +135,11 @@ This file is generated code. Please do not modify it by hand.`;
     const goFile = {
         documentation,
         package: 'crud',
-        imports: {}, // will be added to based on the declarations
+        // `imports` is filled out more later
+        imports: {
+            'database/sql': null,
+            'context': null
+        },
         declarations: messages.map(message => [
             funcCreate({
                 typeName: message.name,
@@ -190,7 +194,7 @@ function funcCreate({typeName, instructions, types, typePackageAlias}) {
 
     // Here's what we're going for:
     //
-    //     // CreateFooBar adds the specified message to the specified db subject to
+    //     // CreateFooBar adds the specified message to the specified db, subject to
     //     // the specified cancellation context ctx. Return nil on success, or return
     //     // a non-nil value if an error occurs.
     //     func CreateFooBar(ctx context.Context, db *sql.DB, message pb.FooBar) (err error) {
@@ -207,7 +211,7 @@ function funcCreate({typeName, instructions, types, typePackageAlias}) {
 
     const funcName = `Create${messageOrEnum2go(typeName)}`;
     const documentation =
-`${funcName} adds the specified message to the specified db subject to the
+`${funcName} adds the specified message to the specified db, subject to the
 specified cancellation context ctx. Return nil on success, or return a
 non-nil value if an error occurs.`;
     const arguments = [
@@ -948,8 +952,9 @@ function performExec({
     }
 }
 
-// Return an array of statements that perform the specified CRUD "exec"
-// `instruction` in the context implied by the other specified arguments.
+// Return an array of statements that perform the specified CRUD
+// "exec-with-tuples" `instruction` in the context implied by the other
+// specified arguments.
 function performExecWithTuples({
     // the "exec-with-tuples" CRUD instruction
     instruction,

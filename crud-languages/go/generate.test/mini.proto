@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package scouts;
+
+option go_package = "boyscouts.com/type/scouts;scouts";
+
+message BoyScout {
+    string id = 1; // RFC 4122 UUID
+    string full_name = 2; // e.g. Samayamantri Venkata Rama Naga Butchi Anjaneya Satya Krishna Vijay
+    string short_name = 3; // e.g. Alice
+
+    string country_code = 6; // ISO 3166-1 alpha-3 upper-case
+    string language_code = 10; // ISO 639-1 two-character lower-case
+    uint32 pack_code = 7; // as administered by the Head Wolf
+
+    Rank rank = 5;
+}
+
+enum Rank {
+    RANK_UNKNOWN = 0;
+    RANK_CUB_SCOUT = 1;
+    RANK_WEBELOS = 2;
+    RANK_BOY_SCOUT = 3;
+    RANK_EAGLE_SCOUT = 4;
+    RANK_SPACE_CADET = 5;
+    RANK_SAMURAI = 6;
+}

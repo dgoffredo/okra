@@ -60,13 +60,21 @@ engine = InnoDB
 character set utf8mb4
 comment = 'do we end up with an array of pointers?';
 
+create table `girl_scout`(
+    `id` varchar(255) not null comment 'RFC 4122 UUID',
+    primary key (`id`))
+engine = InnoDB
+character set utf8mb4;
+
 insert into `rank` (`id`, `name`, `description`) values
 (0, 'RANK_UNKNOWN', null),
-(1, 'RANK_WEBELOS', null),
-(2, 'RANK_BOY_SCOUT', null),
-(3, 'RANK_EAGLE_SCOUT', null),
-(4, 'RANK_SPACE_CADET', null),
-(5, 'RANK_SAMURAI', null);
+(1, 'RANK_CUB_SCOUT', null),
+(2, 'RANK_WEBELO', 'I was one of these briefly'),
+(3, 'RANK_BOY_SCOUT', null),
+(4, 'RANK_EAGLE_SCOUT', null),
+(5, 'RANK_SPACE_CADET', null),
+(6, 'RANK_SAMURAI', null),
+(7, 'RANK_PROFESSIONAL_BOWLER', 'there''s nothing after');
 
 insert into `badge` (`id`, `name`, `description`) values
 (0, 'BADGE_UNKNOWN', null),
@@ -75,7 +83,7 @@ insert into `badge` (`id`, `name`, `description`) values
 (3, 'BADGE_RAINMAKING', null),
 (4, 'BADGE_ASSKICKING', null),
 (5, 'BADGE_HEADSCRATCHING', null),
-(6, 'BADGE_BALLET', null),
+(6, 'BADGE_BALLET', 'sometimes given out for jazz'),
 (7, 'BADGE_FISHING', null);
 
 commit;

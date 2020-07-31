@@ -30,13 +30,22 @@ message BoyScout {
     repeated google.type.Date camping_trips = 14;
 }
 
+message GirlScout {
+    string id = 1; // RFC 4122 UUID
+    // TODO: They're the same as Boy Scouts. Maybe refactor into "Scout"
+    // message and have a gender field. Trouble is, they're different
+    // organizations.
+}
+
 enum Rank {
     RANK_UNKNOWN = 0;
-    RANK_WEBELOS = 1;
-    RANK_BOY_SCOUT = 2;
-    RANK_EAGLE_SCOUT = 3;
-    RANK_SPACE_CADET = 4;
-    RANK_SAMURAI = 5;
+    RANK_CUB_SCOUT = 1;
+    RANK_WEBELO = 2; // I was one of these briefly
+    RANK_BOY_SCOUT = 3;
+    RANK_EAGLE_SCOUT = 4;
+    RANK_SPACE_CADET = 5;
+    RANK_SAMURAI = 6;
+    RANK_PROFESSIONAL_BOWLER = 7; // there's nothing after
 }
 
 enum Badge {
@@ -46,6 +55,6 @@ enum Badge {
     BADGE_RAINMAKING = 3;
     BADGE_ASSKICKING = 4;
     BADGE_HEADSCRATCHING = 5;
-    BADGE_BALLET = 6;
+    BADGE_BALLET = 6; // sometimes given out for jazz
     BADGE_FISHING = 7;
 }
