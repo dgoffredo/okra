@@ -15,9 +15,9 @@ import (
 
 func dbConn() *sql.DB {
 	dbDriver := "mysql"
-	dbUser := "davidg"
+	dbUser := "david"
 	dbPass := ""
-	dbName := "okcupid"
+	dbName := "foo"
 	// db, err := sql.Open(dbDriver, fmt.Sprintf("%s:%s@/%s?parseTime=true", dbUser, dbPass, dbName))
 	db, err := sql.Open(dbDriver, fmt.Sprintf("%s:%s@/%s", dbUser, dbPass, dbName))
 	if err != nil {
@@ -45,7 +45,15 @@ func main() {
 		CampingTrips: nil}
 
 	db := dbConn()
-	err := crud.CreateBoyScout(context.TODO(), db, ted)
+	ctx := context.TODO()
+	err := crud.CreateBoyScout(ctx, db, ted)
 	fmt.Println(err)
+
+	for i := 0; i < 3; i++ {
+		tedAgain, err := crud.ReadBoyScout(ctx, db, ted.Id)
+		// tedAgain, err := crud.ReadBoyScout(ctx, db, "nonsense")
+		fmt.Println(tedAgain)
+		fmt.Println(err)
+	}
 	fmt.Println("we're done")
 }

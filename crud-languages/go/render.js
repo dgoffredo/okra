@@ -71,9 +71,9 @@ function stringifyExpression(expression) {
     else if (expression.call) {
         return stringifyCall(expression.call);
     }
-    else if (expression.slice) {
-        const type = expression.slice.type || '';
-        const elements = expression.slice.elements;
+    else if (expression.sequenceLiteral) {
+        const type = expression.sequenceLiteral.type || '';
+        const elements = expression.sequenceLiteral.elements;
         return `${type}{${elements.map(stringifyExpression).join(', ')}}`;
     }
     else if (expression.dot) {
@@ -193,6 +193,13 @@ function stringifyReturn(expressions) {
     }
 }
 
+function renderDeferThunk(statements, lines) {
+    lines.push('defer func() {');
+    statements.forEach(
+        statement => renderStatement(statement, lines.indented()));
+    lines.push('}()');
+}
+
 function renderStatement(statement, lines) {
     if (statement.assign) {
         lines.push(stringifyAssign(statement.assign));
@@ -214,6 +221,12 @@ function renderStatement(statement, lines) {
     }
     else if (statement.variable) {
         renderVariable(statement.variable, lines);
+    }
+    else if (statement.defer) {
+        lines.push(`defer ${stringifyStatement(statement.defer)}`);
+    }
+    else if (statement.deferThunk) {
+        renderDeferThunk(statement.deferThunk, lines);
     }
     else {
         lines.push(stringifyExpression(statement));
@@ -246,7 +259,14 @@ function renderFunction(func, lines) {
         : `(${results.map(stringifyArgument).join(', ')}) `; // +extra space 
 
     lines.push(`func ${name}(${arguments.map(stringifyArgument).join(', ')}) ${resultTuple}{`);
-    variables.forEach(variable => renderVariable(variable, lines.indented()));
+
+    // Each variable gets a `var`, but additionally might have a `defer func() ...`.
+    variables.forEach(variable => {
+        renderVariable(variable, lines.indented());
+        if ('defer' in variable) {
+            renderDeferThunk(variable.defer, lines.indented());
+        }
+    });
 
     // Use a blank line to separate the variables section from the statements
     // section, but only if neither is empty.

@@ -35,8 +35,8 @@ function deepCopy(from) {
 // packages (using the `go_package` option). Note that the returned object is
 // stateful. Based on the type names passed to `.typePackageAlias` and on the
 // call order, the package aliases returned by `.typePackageAlias` and by
-// `.protoImports()` will differ (e.g. "a" -> "pb", "b" -> "pb2"; versus "b" ->
-// "pb", "a" -> "pb2").
+// `.protoImports()` will differ (e.g. "a" → "pb", "b" → "pb2"; versus "b" →
+// "pb", "a" → "pb2").
 function typeImports({types, options}) {
     // {<file>: <package>}
     const packageByFile = Object.entries(options).reduce(
@@ -48,8 +48,7 @@ function typeImports({types, options}) {
             // "some/real/name;alias" where the part after the semicolon can be
             // different from the "name" part. We're interested in just the
             // full package name itself, so omit any after-semicolon section.
-            const fullPackageName =
-                fileOptions.goPackage.split(';').slice(0, -1).join(';');
+            const fullPackageName = fileOptions.goPackage.split(';')[0];
             packages[file] = fullPackageName;
         }
         return packages;
@@ -77,6 +76,7 @@ function typeImports({types, options}) {
     function typePackageAlias(typeName) {
         const packageName = packageByType[typeName];
         let alias = packageAliases[packageName];
+
         if (alias !== undefined) {
             return alias;
         }
@@ -115,7 +115,7 @@ function generate({crud, types, options}) {
     types.forEach(schemas.type.enforce);
     // - `options`
     tisch.compileFunction(({Any, etc}) => ({
-        // file path -> FileOptions object from protocol buffer compiler
+        // file path → FileOptions object from protocol buffer compiler
         [Any]: Object,
         ...etc
     })).enforce(options);
@@ -140,17 +140,27 @@ This file is generated code. Please do not modify it by hand.`;
             'database/sql': null,
             'context': null
         },
-        declarations: messages.map(message => [
-            funcCreate({
-                typeName: message.name,
-                instructions: crud[message.name].create,
-                types, 
-                typePackageAlias
-            }),
-            // funcRead(message, TODO),
-            // funcUpdate(message, TODO),
-            // funcDelete(message, TODO)
-        ]).flat()
+        declarations: messages.map(message => {
+            // Return an object of arguments to pass to one of the functions
+            // `funcCreate`, `funcRead`, etc. Which one is determined by
+            // `operation`: one of "create", "read", etc.
+            function argumentsFor(operation) {
+                return {
+                    typeName: message.name,
+                    // e.g. crud[message.name].create, or .read
+                    instructions: crud[message.name][operation],
+                    types, 
+                    typePackageAlias
+                };
+            }
+
+            return [
+                funcCreate(argumentsFor('create')),
+                funcRead(argumentsFor('read')),
+                // funcUpdate(message, TODO),
+                // funcDelete(message, TODO)
+            ];
+        }).flat()
     };
 
     // Calls to `typePackageAlias` have been helping decide which
@@ -173,6 +183,63 @@ This file is generated code. Please do not modify it by hand.`;
     return renderFile(goFile);
 }
 
+// `beginTransaction` is an array of Go statements common to all CRUD
+// operations. It begins a database transaction and returns an error if that
+// fails. It also ends with a "spacer" to set it apart from whatever
+// statements might follow.
+//
+//     transaction, err = db.BeginTx(ctx, nil)
+//     if err != nil {
+//         return
+//     }
+//
+const beginTransaction = Object.freeze([
+    // transaction, err = db.BeginTx(ctx, nil)
+    {assign: {
+        left: ['transaction', 'err'],
+        right: [{call: {
+            function: {dot: ['db', 'BeginTx']},
+            arguments: [{symbol: 'ctx'}, null]
+        }}]
+    }},
+
+    // if err != nil {
+    //     return
+    // }
+    {if: {
+        condition: {notEqual: {
+            left: {symbol: 'err'},
+            right: null
+        }},
+        body: [{return: []}]
+    }},
+
+    //
+    {spacer: 1}
+]);
+
+// `commitTransactionAndReturn` is an array of Go statements common to all
+// CRUD operations. It commits a database transaction and returns.
+//
+//     err = transaction.Commit()
+//     return
+//
+const commitTransactionAndReturn = Object.freeze([
+    // err = transaction.Commit()
+    {assign: {
+        left: ['err'],
+        right: [{
+            call: {
+                function: {dot: ['transaction', 'Commit']},
+                arguments: []
+            }
+        }]
+    }},
+
+    // return
+    {return: []}
+]);
+
 // Return a Go AST node representing a func that creates a new instance of a
 // message of the specified `typeName` in the database using the specified CRUD
 // `instructions`. Use the specified `types` object of okra types by name to
@@ -194,10 +261,10 @@ function funcCreate({typeName, instructions, types, typePackageAlias}) {
 
     // Here's what we're going for:
     //
-    //     // CreateFooBar adds the specified message to the specified db, subject to
-    //     // the specified cancellation context ctx. Return nil on success, or return
-    //     // a non-nil value if an error occurs.
+    //     ... documentation ...
     //     func CreateFooBar(ctx context.Context, db *sql.DB, message pb.FooBar) (err error) {
+    //         ... vars ...
+    //
     //         transaction, err = db.BeginTx(ctx, nil)
     //         if err != nil {
     //             return
@@ -221,7 +288,9 @@ non-nil value if an error occurs.`;
          type: `${typePackageAlias(typeName)}.${messageOrEnum2go(typeName)}`}
     ];
     const results = [{name: 'err', type: 'error'}];
-    const variables = [{name: 'transaction', type: '*sql.Tx'}];
+    const variables = [];
+        // Begin by starting a transaction. We'll fill out the rest later.
+    const statements = [...beginTransaction];
     const func = {
         documentation,
         name: funcName,
@@ -229,65 +298,21 @@ non-nil value if an error occurs.`;
         results,
         body: {
             variables,
-            // Begin by starting a transaction. We'll fill out the rest later.
-            statements: [
-                // transaction, err = db.BeginTx(ctx, nil)
-                {assign: {
-                    left: ['transaction', 'err'],
-                    right: [{call: {
-                        function: {dot: ['db', 'BeginTx']},
-                        arguments: [{symbol: 'ctx'}, null]
-                    }}]
-                }},
-
-                // if err != nil {
-                //     return
-                // }
-                {if: {
-                    condition: {notEqual: {
-                        left: {symbol: 'err'},
-                        right: null
-                    }},
-                    body: [{return: []}]
-                }},
-
-                //
-                {spacer: 1}
-            ]
+            statements
         }
     };
 
-    // Define the functions needed by the instruction handlers.
+    // Define the arguments needed by the instruction handlers.
 
-    // field2type :: <fieldName> -> <okra type>
-    const field2type = (function () {
-        const fieldTypeByFieldName = types[typeName].fields.reduce(
-            (byName, {name, type}) => Object.assign(byName, {[name]: type}),
-            {});
-
-        return function (fieldName) {
-            return fieldTypeByFieldName[fieldName];
-        };
-    }());
+    // {<fieldName>: <okra type>}
+    const typeByField = types[typeName].fields.reduce(
+        (byName, {name, type}) => Object.assign(byName, {[name]: type}),
+        {});
 
     // variable({name, goType}) adds the variable with the specified name and
     // having the specified type to the func's variable declarations section if
     // it hasn't been added already, and returns the name of the variable.
-    const variable = (function () {
-        const alreadyDeclared = {};
-
-        return function({name, goType}) {
-            if (name in alreadyDeclared) {
-                return name;
-            }
-
-            // This is the first time we've seen this variable. Add it to the
-            // func's variable declarations.
-            variables.push({name, type: goType});
-            alreadyDeclared[name] = true;
-            return name;
-        };
-    }());
+    const variable = variableAdder(variables);
 
     // In a "create" func, all fields are "included," so this always returns
     // `true`.
@@ -295,31 +320,167 @@ non-nil value if an error occurs.`;
         return true;
     }
 
+    // `transaction` is a variable assumed to be in scope, so add that first.
+    variable({name: 'transaction', goType: '*sql.Tx'});
+
     // Generate statements that implement each instruction, and append the
     // statements to the body of the func.
-    func.body.statements.push(...performInstructions({
+    statements.push(...performInstructions({
         instructions,
-        field2type,
+        typeByField,
         variable,
         included,
         typePackageAlias
     }));
 
-    // Commit the transaction and return.
-    func.body.statements.push(
-        // err = transaction.Commit()
+    statements.push(...commitTransactionAndReturn);
+
+    return {function: func};
+}
+
+// Return a Go AST node representing a func that reads an instance of a
+// message of the specified `typeName` from the database using the specified
+// CRUD `instructions`. Use the specified `types` object of okra types by name
+// to inspect the message type and any enum types that it might depend upon.
+// Use the specified `typePackageAlias` function to look up which package
+// aliases (e.g. "pb", "p2") a given message/enum type belongs to.
+function funcRead({typeName, instructions, types, typePackageAlias}) {
+    // Here's a reminder of what a function (func) looks like:
+    //
+    //     {'function': {
+    //          'documentation?': String,
+    //          'name': String,
+    //          'arguments': [{'name?': String, 'type': String}, ...etc],
+    //          'results': [{'name?': String, 'type': String}, ...etc],
+    //          'body': {
+    //              'variables': [variable, ...etc],
+    //              'statements': [statement, ...etc]
+    //          }}}
+
+    // Here's what we're going for:
+    //
+    //      // ... documentation ...
+    //      func ReadFooBar(ctx context.Context, db *sql.DB, id int64) (message *pb.FooBar, err error) {
+    //         ... vars ...
+    //
+    //         message = &pb.FooBar{}
+    //         message.Id = id
+    //
+    //         transaction, err = db.BeginTx(ctx, nil)
+    //         if err != nil {
+    //             return
+    //         }
+    //
+    //         ... all the instructions ...
+    //
+    //         err = transaction.Commit()
+    //         return
+    //      }
+    
+    const funcName = `Read${messageOrEnum2go(typeName)}`;
+    const messageType =
+        `${typePackageAlias(typeName)}.${messageOrEnum2go(typeName)}`;
+
+    // {<fieldName>: <okra type>}
+    const typeByField = types[typeName].fields.reduce(
+        (byName, {name, type}) => Object.assign(byName, {[name]: type}),
+        {});
+
+    const documentation =
+`${funcName} reads the message having the specified id from the specified
+db, subject to the specified cancellation context ctx. On success, the
+error returned will be nil and the ${messageType} will not be nil. On
+error, the error returned will not be nil.`;
+
+    const arguments = [
+        {name: 'ctx', type: 'context.Context'},
+        {name: 'db', type: '*sql.DB'},
+        // `id` has whatever Go type corresponds to the designated ID field of
+        // the message type.
+        {name: 'id',
+         type: type2go({
+            okraType: typeByField[types[typeName].idFieldName],
+            typePackageAlias
+        })}
+    ];
+    const results = [
+        // `message` is a pointer to a protobuf message (of the correct type)
+        {name: 'message',
+         type: `*${messageType}`},
+        {name: 'err', type: 'error'}
+    ];
+    const variables = [];
+    const statements = [];
+    const func = {
+        documentation,
+        name: funcName,
+        arguments,
+        results,
+        body: {
+            variables,
+            statements
+        }
+    };
+
+    // Define the arguments needed by the instruction handlers.
+
+    // variable({name, goType}) adds the variable with the specified name and
+    // having the specified type to the func's variable declarations section if
+    // it hasn't been added already, and returns the name of the variable.
+    const variable = variableAdder(variables);
+
+    // In a "read" func, all fields are included (I haven't implemented partial
+    // record fetching -- no need), so this always returns `true`.
+    function included(fieldName /*ignored*/) {
+        return true;
+    }
+
+    // `transaction` is a variable assumed to be in scope, so add that first.
+    variable({name: 'transaction', goType: '*sql.Tx'});
+
+
+    // Begin by assigning a default value to `message` (the return
+    // value). Then start a transaction.
+    statements.push(
+        // message = &pb.FooBar{}
         {assign: {
-            left: ['err'],
+            left: ['message'],
             right: [{
-                call: {
-                    function: {dot: ['transaction', 'Commit']},
-                    arguments: []
+                address: {
+                    sequenceLiteral: {
+                        type: messageType,
+                        elements: []
+                    }
                 }
             }]
         }},
 
-        // return
-        {return: []});
+        // message.Id = id
+        {assign: {
+            left: [{
+                dot: ['message', field2go(types[typeName].idFieldName)]
+            }],
+            right: [{symbol: 'id'}]
+        }},
+
+        // transaction, err = db.BeginTx(ctx, nil)
+        // if err != nil {
+        //     return
+        // }
+        ...beginTransaction
+    );
+
+    // Generate statements that implement each instruction, and append the
+    // statements to the body of the func.
+    statements.push(...performInstructions({
+        instructions,
+        typeByField,
+        variable,
+        included,
+        typePackageAlias
+    }));
+
+    statements.push(...commitTransactionAndReturn);
 
     return {function: func};
 }
@@ -335,7 +496,7 @@ function field2go(protoFieldName) {
 // Return the Go struct or enum type name that would be generated for the specified
 // `protoName`, where `protoName` is the name of a protobuf message or enum.
 function messageOrEnum2go(protoName) {
-    // `basename` e.g. ".foo.bar.Baz" -> "Baz"
+    // `basename` is e.g. for ".foo.bar.Baz" → "Baz"
     const basename = protoName.split('.').slice(-1)[0];
 
     return names.normalize(basename, 'TitleCamelCase');
@@ -366,7 +527,7 @@ function type2go({
 
     if (okraType.enum) {
         const enumName = messageOrEnum2go(okraType.enum);
-        const packageAlias = typePackageAlias(enumName);
+        const packageAlias = typePackageAlias(okraType.enum);
         return `${packageAlias}.${enumName}`;
     }
 
@@ -394,51 +555,146 @@ function type2go({
 // All of the "perform ..." functions assume that the following variables are
 // in scope:
 // - `message` is the protobuf message struct being read from or written to.
-// - `transaction` is the `sql.Tx` object for the current database transaction.
+//   It might be a pointer to a message or the message itself, depending on
+//    the context.
+// - `transaction` is the `*sql.Tx` object for the current database transaction.
 // - `ctx` is the `context.Context` object describing the current cancellation
 //   context.
 // - `err` is the `error` variable to assign to before returning due to an
 //   error.
 //
+// Additionally, "perform..." functions might depend on any of the following
+// variables, but will say so by invoking their `variable` parameter first
+// (i.e. these are not assumed to be in scope, but will be if indicated by a
+// call to `variable`):
+// - `parameters` is a `[]interface{}` used when specifying a variable number
+//   of parameters to a SQL command (such as the "exec-with-tuples"
+//   instruction).
+// - `rows` is a `*sql.Rows` used when iterating through SQL query results.
+// - `ok` is `bool` used to capture the success or failure of `rows.Next()`.
+//
 // If an instruction encounters an error, it will assign to `err` and then
 // return using a `return` statement without any arguments. Thus the function
 // in which the instruction is expanded must use named return values.
 
-// The following snippet of Go AST occurs in a few places, so here it is once for reuse:
+// `cleanupFunctions` associates Go variables with functions that "clean them
+// up." Each key in `cleanupFunctions` is a JSON-serialized name/type pair, and
+// the values of `cleanupFunctions` are Go AST nodes describing the body of a
+// function (just the body) that can be deferred to clean up the variable.
 //
-//     if err != nil {
-//         err = combineErrors(err, transaction.Rollback())
-//         return
-//     }
-const ifErrRollbackAndReturn = {
-    if: {
-        condition: {notEqual: {left: {symbol: 'err'}, right: null}},
-        body: [
-            // err = combineErrors(err, transaction.Rollback())
-            {assign: {
-                left: ['err'],
-                right: [{call: {
-                    function: 'combineErrors',
-                    arguments: [
-                        {symbol: 'err'},
-                        {call: {
-                            function: {dot: ['transaction', 'Rollback']},
-                            arguments: []
-                        }}
-                    ]
-                }}]}},
+// For example, if `file` is a `*os.File`, then `file.Close()` could be
+// deferred using the following statement:
+//
+//     defer func() {
+//         file.Close()
+//     }()
+//
+// That would correspond to an entry in `cleanupFunctions` with the key
+// `JSON.stringify(['file', '*os.File'])` and the value:
+//
+//     [{
+//         call: {
+//             function: {dot: ['file', 'Close']},
+//             arguments: []
+//         }
+//     }]
+//
+// Note that the value is an array, even if it contains only one statement.
+const cleanupFunctions = {
+    // When an error occurrs, we want to rollback the current transaction.
+    //
+    //     if err != nil && transaction != nil {
+    //         err = combineErrors(err, transaction.Rollback())
+    //     }
+    [JSON.stringify(['transaction', '*sql.Tx'])]: [{
+        if: {
+            condition: {and: {
+                left: {notEqual: {left: {symbol: 'err'}, right: null}},
+                right: {notEqual: {left: {symbol: 'transaction'}, right: null}}}},
+            body: [
+                // err = combineErrors(err, transaction.Rollback())
+                {assign: {
+                    left: ['err'],
+                    right: [{call: {
+                        function: 'combineErrors',
+                        arguments: [
+                            {symbol: 'err'},
+                            {call: {
+                                function: {dot: ['transaction', 'Rollback']},
+                                arguments: []
+                            }}
+                        ]
+                    }}]}}
+            ]
+    }}],
 
-            // return (because an error occurred)
-            {return: []}
-        ]
-}};
+    // `sql.Rows.Close()` must be called if the `Rows` were not exhausted by
+    // calls to `.Next()`, even if we subsequently rollback the associated
+    // transaction due to an error (in fact, attempting to do so without first
+    // calling `Rows.Close()` will poison the underlying database connection).
+    // `deferCleanupRows` is an array of Go statement that can appear in a
+    // deferred function to cleanup a variable named `rows`.
+    //
+    //     if rows != nil {
+    //         rows.Close()
+    //     }
+    [JSON.stringify(['rows', '*sql.Rows'])]: [{
+        if: {
+            condition: {
+                notEqual: {
+                    left: {symbol: 'rows'},
+                    right: null
+                }
+            },
+            body: [{
+                call: {
+                    function: {dot: ['rows', 'Close']},
+                    arguments: []}
+            }]
+        }
+    }]
+};
+
+// Return a `function ({name, goType})` that adds the variable with the
+// specified `name` and having the specified `goType` to `variables` if it
+// hasn't been added already. Additionally, if the variable's name and type
+// are associated with a cleanup function, a defer statement invoking the
+// cleanup function will be appended to the specified `statements`. Which
+// variables have cleanup functions is determined by the `cleanupFunctions`
+// global object.
+function variableAdder(variables) {
+    const alreadyDeclared = {};
+
+    return function({name, goType}) {
+        if (name in alreadyDeclared) {
+            return name;
+        }
+
+        // This is the first time we've seen this variable. Add it to the
+        // func's variable declarations.
+        const variable = {
+            name,
+            type: goType
+        };
+
+        // If there's a cleanup function registered for this name/type pair,
+        // then include it as well.
+        const body = cleanupFunctions[JSON.stringify([name, goType])];
+        if (body !== undefined) {
+            variable.defer = body;
+        }
+
+        variables.push(variable);
+        alreadyDeclared[name] = true;
+    };
+}
 
 // Return an a Go AST expressions for the specified `parameter` that can appear
 // as input parameters to database methods like `Query` and `Exec`. This code
 // is common to relevant CRUD instructions.
-function inputParameter2expression({parameter, field2type, included}) {
+function inputParameter2expression({parameter, typeByField, included}) {
     if (parameter.field) {
-        const type = field2type(parameter.field); // okra type
+        const type = typeByField[parameter.field]; // okra type
         const member = field2go(parameter.field); // Go struct field name
         if (type.builtin === '.google.protobuf.Timestamp') {
             return {
@@ -477,14 +733,14 @@ function inputParameters2expressions({
     // array of input parameters, per `ast.tisch.js`
     parameters,
 
-    // function that maps a message field name to an okra type
-    field2type,
+    // object that maps a message field name to an okra type
+    typeByField,
 
     // function that returns an expression for whether a field is included in the CRUD operation
     included
 }) {
     return parameters.map(parameter => 
-        inputParameter2expression({parameter, field2type, included}));
+        inputParameter2expression({parameter, typeByField, included}));
 }
 
 // Return an array of statements that perform each of the specified
@@ -494,8 +750,8 @@ function performInstructions({
     // array of CRUD instruction
     instructions,
 
-    // function that maps a message field name to an okra type
-    field2type,
+    // object that maps a message field name to an okra type
+    typeByField,
 
     // function that registers a specified `variable({name, goType})` and returns `name`
     // Note that that variables that are _assumed_ to be in scope, such as
@@ -520,7 +776,7 @@ function performInstructions({
     return instructions.map(instruction => {
         const statements = handlerByName[instruction.instruction]({
             instruction,
-            field2type,
+            typeByField,
             variable,
             included,
             typePackageAlias
@@ -532,14 +788,29 @@ function performInstructions({
     }).flat();
 }
 
+// This snippet of Go code is used a lot, so here it is for reuse.
+const ifErrReturn = {
+    if: {
+        condition: {
+            notEqual: {
+                left: {symbol: 'err'},
+                right: null
+            }
+        },
+        body: [{
+            return: []
+        }]
+    }
+};
+
 // Return an array of statements that perform the specified CRUD "query"
 // `instruction` in the context implied by the other specified arguments.
 function performQuery({
     // the "query" CRUD instruction
     instruction,
 
-    // function that maps a message field name to an okra type
-    field2type,
+    // object that maps a message field name to an okra type
+    typeByField,
 
     // function that registers a specified `variable({name, goType})` and returns `name`
     // Note that that variables that are _assumed_ to be in scope, such as
@@ -562,13 +833,12 @@ function performQuery({
     //
     //     rows, err = transaction.QueryContext(ctx, $query, $parameters ...)
     //     if err != nil {
-    //         err = combineErrors(err, transaction.Rollback())
     //         return
     //     }
 
     const parameters = inputParameters2expressions({
         parameters: instruction.parameters,
-        field2type,
+        typeByField,
         included
     });
 
@@ -592,10 +862,9 @@ function performQuery({
         }},
 
         // if err != nil {
-        //     err = combineErrors(err, transaction.Rollback())
         //     return
         // }
-        ifErrRollbackAndReturn
+        ifErrReturn
     ]
 }
 
@@ -605,8 +874,8 @@ function performReadRow({
     // the "read-row" CRUD instruction
     instruction,
 
-    // function that maps a message field name to an okra type
-    field2type,
+    // object that maps a message field name to an okra type
+    typeByField,
 
     // function that registers a specified `variable({name, goType})` and returns `name`
     // Note that that variables that are _assumed_ to be in scope, such as
@@ -634,18 +903,17 @@ function performReadRow({
     //     ok = rows.Next()
     //     if !ok {
     //         err = fmt.Errorf("Unable to read row from database. There is no row.")
-    //         err = combineErrors(err, transaction.Rollback())
     //         return
     //     }
     //     
     //     err = rows.Scan($destinations)
     //     if err != nil {
-    //         err = combineErrors(err, transaction.Rollback())
     //         return
     //     }
-
+    //     rows.Next()
+    //
     const destinations = instruction.destinations.map(destination => {
-        const type = field2type(destination.field); // okra type
+        const type = typeByField[destination.field]; // okra type
         const member = field2go(destination.field); // Go struct field name
         if (type.builtin === '.google.protobuf.Timestamp') {
             return {
@@ -689,7 +957,6 @@ function performReadRow({
 
         // if !ok {
         //     err = fmt.Errorf("Unable to read row from database. There is no row.")
-        //     err = combineErrors(err, transaction.Rollback())
         //     return
         // }
         {if: {
@@ -702,21 +969,6 @@ function performReadRow({
                             function: {dot: ['fmt', 'Errorf']},
                             arguments: [
                                 "Unable to read row from database. There is no row."
-                            ]
-                        }
-                    }]
-                }},
-                {assign: {
-                    left: ['err'],
-                    right: [{
-                        call: {
-                            function: 'combineErrors',
-                            arguments: [
-                                {symbol: 'err'},
-                                {call: {
-                                    function: {dot: ['transaction', 'Rollback']},
-                                    arguments: []
-                                }}
                             ]
                         }
                     }]
@@ -740,10 +992,14 @@ function performReadRow({
         }},
 
         // if err != nil {
-        //     err = combineErrors(err, transaction.Rollback())
         //     return
         // }
-        ifErrRollbackAndReturn
+        ifErrReturn,
+
+        // rows.Next()
+        {call: {
+            function: {dot: ['rows', 'Next']},
+            arguments: []}}
     ];
 }
 
@@ -753,8 +1009,8 @@ function performReadArray({
     // the "read-array" CRUD instruction
     instruction,
 
-    // function that maps a message field name to an okra type
-    field2type,
+    // object that maps a message field name to an okra type
+    typeByField,
 
     // function that registers a specified `variable({name, goType})` and returns `name`
     // Note that that variables that are _assumed_ to be in scope, such as
@@ -782,7 +1038,6 @@ function performReadArray({
     //         var temp whateverGoType
     //         err = rows.Scan(&temp) // might use intoDate or intoTimestamp
     //         if err != nil {
-    //             err = combineErrors(err, transaction.Rollback())
     //             return
     //         }
     //         $destination = append($destination, temp)
@@ -791,7 +1046,7 @@ function performReadArray({
     // For each row, we scan one array element into a temporary variable
     // `temp`. The expression that we pass to `rows.Scan` depends on the type
     // of the destination array. `intoTemp` is that expression.
-    const elementType = field2type(instruction.destination.field).array;
+    const elementType = typeByField[instruction.destination.field].array;
     const intoTemp = (function () {
         // &temp
         const address = {address: {symbol: 'temp'}};
@@ -816,7 +1071,7 @@ function performReadArray({
     };
 
     // The following code references this variable.
-    variable({name: 'rows', goType: '*sql.Rows'})
+    variable({name: 'rows', goType: '*sql.Rows'});
 
     return [{
         // for rows.Next() {
@@ -848,10 +1103,9 @@ function performReadArray({
                 }},
 
                 // if err != nil {
-                //     err = combineErrors(err, transaction.Rollback())
                 //     return
                 // }
-                ifErrRollbackAndReturn,
+                ifErrReturn,
 
                 // $destination = append($destination, temp)
                 {assign: {
@@ -877,8 +1131,8 @@ function performExec({
     // the "exec" CRUD instruction
     instruction,
 
-    // function that maps a message field name to an okra type
-    field2type,
+    // object that maps a message field name to an okra type
+    typeByField,
 
     // function that registers a specified `variable({name, goType})` and returns `name`
     // Note that that variables that are _assumed_ to be in scope, such as
@@ -903,7 +1157,6 @@ function performExec({
     //
     //     _, err = transaction.ExecContext(ctx, $query, $parameters ...)
     //     if err != nil {
-    //         err = combineErrors(err, transaction.Rollback())
     //         return
     //     }
     //
@@ -911,7 +1164,7 @@ function performExec({
 
     const parameters = inputParameters2expressions({
         parameters: instruction.parameters,
-        field2type,
+        typeByField,
         included
     });
 
@@ -933,10 +1186,9 @@ function performExec({
         }},
 
         // if err != nil {
-        //     err = combineErrors(err, transaction.Rollback())
         //     return
         // }
-        ifErrRollbackAndReturn
+        ifErrReturn
     ];
 
     if ('condition' in instruction) {
@@ -959,8 +1211,8 @@ function performExecWithTuples({
     // the "exec-with-tuples" CRUD instruction
     instruction,
 
-    // function that maps a message field name to an okra type
-    field2type,
+    // object that maps a message field name to an okra type
+    typeByField,
 
     // function that registers a specified `variable({name, goType})` and returns `name`
     // Note that that variables that are _assumed_ to be in scope, such as
@@ -984,7 +1236,7 @@ function performExecWithTuples({
     });
 
     const arrays = instruction.parameters.filter(
-        parameter => field2type(parameter.field).array);
+        parameter => typeByField[parameter.field].array);
 
     if (arrays.length !== 1) {
         throw Error(`Expected "exec-with-tuples" parameters to contain ` +
@@ -1009,7 +1261,6 @@ function performExecWithTuples({
     //             parameters...)
     //
     //         if err != nil {
-    //             err = combineErrors(err, transaction.Rollback())
     //             return
     //         }
     //     }
@@ -1090,7 +1341,7 @@ function performExecWithTuples({
                                         else {
                                             return inputParameter2expression({
                                                 parameter,
-                                                field2type,
+                                                typeByField,
                                                 included
                                             });
                                         }
@@ -1128,10 +1379,9 @@ function performExecWithTuples({
                 }},
 
                 // if err != nil {
-                //     err = combineErrors(err, transaction.Rollback())
                 //     return
                 // }
-                ifErrRollbackAndReturn
+                ifErrReturn
             ]
         }}
     ];

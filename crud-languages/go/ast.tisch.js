@@ -40,8 +40,8 @@
         // $type{$elements}
         // or
         // {$elements}
-        {'slice': {
-            'type?': String, // name of the slice type
+        {'sequenceLiteral': {
+            'type?': String,
             'elements': [expression, ...etc]
         }},
 
@@ -118,7 +118,19 @@
         // dedicated section (and are not considered statements). However,
         // sometimes it's convenient to declare a variable for termporary use,
         // so the `variable` statement is allowed.
-        {'variable': variable}));
+        {'variable': variable},
+        
+        // defer $expression
+        {'defer': expression},
+         
+        // A `thunk` is a zero-argument function meant to be used as a
+        // callback. Here we combine it with Go's `defer` statement to create
+        // a dedicated statement similar to D's `scope(exit)`.
+        // 
+        //     defer func() {
+        //         $statement ...
+        //     }()
+        {'deferThunk': [statement, ...etc]}));
 
     const file = {
         'documentation?': String, // commented per-line
@@ -145,7 +157,12 @@
                     // statements, just like good old C89.
                     // There are a couple exceptions: loop variables and
                     // temporaries used for database value scanning.
-                    'variables': [variable, ...etc],
+                    'variables': [{
+                        // everything in the `variable` schema
+                        ...variable,
+                        // and optionally a `defer func() {...}()` for cleanup
+                        'defer?': [statement, ...etc]
+                    }, ...etc],
                     'statements': [statement, ...etc]
                 }
             }},

@@ -275,6 +275,15 @@ type CompositeError []error`},
 `// withTuples returns a string consisting of the specified sqlStatement
 // followed by the specified numTuples copies of the specified sqlTuple
 // separated by commas and spaces. numTuples must be greater than zero.
+//
+// For example, the following invocation:
+//
+//     withTuples("insert into foobar(x, y) values", "(?, ?)", 3)
+//
+// returns the following string:
+//
+//     "insert into foobar(x, y) values(?, ?), (?, ?), (?, ?)"
+//
 func withTuples(sqlStatement string, sqlTuple string, numTuples int) string {
 	if numTuples < 1 {
 		panic(fmt.Sprintf("withTuples requires at least one tuple, but %d were specified",

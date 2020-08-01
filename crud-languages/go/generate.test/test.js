@@ -11,9 +11,9 @@ const {types2tables} = require('../../../lib/types2tables');
 const {types2crud} = require('../../../sql-dialects/mysql5.6/types2crud');
 const {generate} = require('../generate');
 
-// proto2types for boyscouts -> {types, options}
-// types2tables to get legends -> {tables, legends}
-// types2crud  -> {<type>: {<operation>: [<instruction>, ...]}}
+// proto2types for boyscouts → {types, options}
+// types2tables to get legends → {tables, legends}
+// types2crud  → {<type>: {<operation>: [<instruction>, ...]}}
 
 const {types, options} = proto2types({
         protoFiles: [__dirname + '/scouts.proto'],
