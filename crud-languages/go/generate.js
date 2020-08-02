@@ -12,95 +12,34 @@ define([
     '../../schemas/schemas',
     '../../lib/names'],
     function (prerendered, {renderFile}, tisch, schemas, names) {
-// 'use strict';
-// SyntaxError: Illegal 'use strict' directive in function with non-simple parameter list
 
-function deepCopy(from) {
-    // JSON-compatible data only. What do you want?
-    return JSON.parse(JSON.stringify(from));
-}
-
-// Return an object
+// The code in this file is divided into five sections. Since there's a lot of
+// code, I hope that the organization will aid navigation.
 //
-//     {
-//         protoImports: function () => {<full package>: <package alias>},
-//         typePackageAlias: function (<type name>) => <package alias>
-//     }
+// Each section is headed with a markdown-style comment. Here is a summary of
+// the sections:
 //
-// where `.protoImports` is a function that returns package imports for the
-// protoc generated code of the specified `types` array, and
-// `.typePackageAlias` is a function that maps each name of the `types` to the
-// alias of the package in which that type is defined. Use the specified
-// `options` object of per-file protobuf options to associate types with Go
-// packages (using the `go_package` option). Note that the returned object is
-// stateful. Based on the type names passed to `.typePackageAlias` and on the
-// call order, the package aliases returned by `.typePackageAlias` and by
-// `.protoImports()` will differ (e.g. "a" → "pb", "b" → "pb2"; versus "b" →
-// "pb", "a" → "pb2").
-function typeImports({types, options}) {
-    // {<file>: <package>}
-    const packageByFile = Object.entries(options).reduce(
-        (packages, [file, fileOptions]) => {
-        // Protobuf JSONification changes the naming convention for fields, so
-        // it's `goPackage`, not `go_package`.
-        if (fileOptions.goPackage) {
-            // The `go_package` option supports special syntax:
-            // "some/real/name;alias" where the part after the semicolon can be
-            // different from the "name" part. We're interested in just the
-            // full package name itself, so omit any after-semicolon section.
-            const fullPackageName = fileOptions.goPackage.split(';')[0];
-            packages[file] = fullPackageName;
-        }
-        return packages;
-    }, {});
+// - "Generate" contains only the `generate` function, which is the function
+//   provided by this module.
+// - "CRUD Operations" contains one function for each of the CRUD operations
+//   create/read/update/delete. Each function produces the abstract syntax tree
+//   (AST) of a function that does the indicated operation for some message type.
+// - "CRUD Instructions" contains one function for each of the CRUD
+//   instructions that are combined to create the bodies of CRUD operations. An
+//   instruction is something like "execute this SQL query." Each function in
+//   this section returns an array of statements that can be included as part of
+//   the AST returned by one of the functions in the "CRUD Operations" section.
+// - "Finishers" contains functions that walk an AST and possibly modify it.
+//   For example, there's one function that walks through an AST describing a Go
+//   file, identifies references to standard packages, and inserts the
+//   appropriate imports.
+// - "Utilities" contains everything else. It's a mix of functions and
+//   constants used throughout the other sections.
 
-    // {<type name>: <package>}
-    const packageByType = Object.values(types).reduce((byType, {file, name}) => {
-        if (file === undefined) {
-            throw Error(`Type named ${name} is not associated with a .proto ` +
-                `file, which means we can't deduce in which Go package to ` +
-                `find its generated Go code.`);
-        }
-        if (!(file in packageByFile)) {
-            throw Error(`Type named ${name} defined in proto file ${file}, ` +
-                `but that file does not declare a go_package option, so we ` +
-                `can't deduce in which Go package to find the type's ` +
-                `generated Go code.`);
-        }
-        byType[name] = packageByFile[file];
-        return byType;
-    }, {});
-
-    const packageAliases = {}; // {<package>: <alias>}
-
-    function typePackageAlias(typeName) {
-        const packageName = packageByType[typeName];
-        let alias = packageAliases[packageName];
-
-        if (alias !== undefined) {
-            return alias;
-        }
-
-        // Create a new alias. If it's the first one, call it "pb". If it's the
-        // second one, call it "pb2", etc.
-        const numMentionedPackages = Object.keys(packageAliases).length;
-        if (numMentionedPackages === 0) {
-            alias = 'pb';
-        }
-        else {
-            alias = `pb${numMentionedPackages + 1}`;
-        }
-
-        packageAliases[packageName] = alias;
-        return alias;
-    }
-
-    function protoImports() {
-        return deepCopy(packageAliases);
-    }
-
-    return {protoImports, typePackageAlias};
-}
+// Generate
+// ========
+// This section contains the `generate` function, which is the function
+// provided by this module.
 
 // Return a string of Go source code for a module that implements the CRUD
 // operations indicated by the specified parameters:
@@ -183,62 +122,11 @@ This file is generated code. Please do not modify it by hand.`;
     return renderFile(goFile);
 }
 
-// `beginTransaction` is an array of Go statements common to all CRUD
-// operations. It begins a database transaction and returns an error if that
-// fails. It also ends with a "spacer" to set it apart from whatever
-// statements might follow.
-//
-//     transaction, err = db.BeginTx(ctx, nil)
-//     if err != nil {
-//         return
-//     }
-//
-const beginTransaction = Object.freeze([
-    // transaction, err = db.BeginTx(ctx, nil)
-    {assign: {
-        left: ['transaction', 'err'],
-        right: [{call: {
-            function: {dot: ['db', 'BeginTx']},
-            arguments: [{symbol: 'ctx'}, null]
-        }}]
-    }},
-
-    // if err != nil {
-    //     return
-    // }
-    {if: {
-        condition: {notEqual: {
-            left: {symbol: 'err'},
-            right: null
-        }},
-        body: [{return: []}]
-    }},
-
-    //
-    {spacer: 1}
-]);
-
-// `commitTransactionAndReturn` is an array of Go statements common to all
-// CRUD operations. It commits a database transaction and returns.
-//
-//     err = transaction.Commit()
-//     return
-//
-const commitTransactionAndReturn = Object.freeze([
-    // err = transaction.Commit()
-    {assign: {
-        left: ['err'],
-        right: [{
-            call: {
-                function: {dot: ['transaction', 'Commit']},
-                arguments: []
-            }
-        }]
-    }},
-
-    // return
-    {return: []}
-]);
+// CRUD Operations
+// ===============
+// This section contains one function for each of the CRUD operations
+// create/read/update/delete. Each function produces AST of a function that
+// does the indicated operation for some message type.
 
 // Return a Go AST node representing a func that creates a new instance of a
 // message of the specified `typeName` in the database using the specified CRUD
@@ -632,417 +520,15 @@ message. Return nil on success, or a non-nil error if an error occurs.`;
     return {function: func};
 }
 
-// Return an array of Go statements that set up local variables used to keep
-// track of which variables are "included" in the current CRUD operation. Use
-// the specified `variable` to register local variables.
-function inclusionBoilerplate(variable) {
-    // These are the variables used to check whether a field is "included".
-    variable({name: 'fieldMaskMap', goType: 'map[string]bool'});
-    variable({name: 'included', goType: 'func(string) bool'});
+// TODO: function funcDelete
 
-    // Set up the "included" function, whose form depends on whether the
-    // `fieldMask` parameter is empty.
-    //
-    //     if len(fieldMask) == 0 {
-    //         included = func(string) bool {
-    //             return true
-    //         }
-    //     }
-    //     else {
-    //         fieldMaskMap = make(map[string]bool, len(fieldMask))
-    //         for _, field := range fieldMask {
-    //             fieldMaskMap[field] = true
-    //         }
-    //         included = func(field string) bool {
-    //             return fieldMaskMap[field]
-    //         }
-    //     }
-    const lenOfFieldMask = {call: {
-        function: 'len',
-        arguments: [{symbol: 'fieldMask'}]}};
-
-    return [{if: {
-        // if len(fieldMask) == 0 {
-        condition: {equal: {
-            left: lenOfFieldMask,
-            right: 0}},
-
-        //     included = func(string) bool {
-        //         return true
-        //     }
-        body: [{assignFunc: {
-            left: 'included',
-            parameters: [{type: 'string'}],
-            results: [{type: 'bool'}],
-            body: [{
-                return: [true]
-            }]
-        }}],
-        // else {
-        elseBody: [
-            // fieldMaskMap = make(map[string]bool, len(fieldMask))
-            {assign: {
-                left: ['fieldMaskMap'],
-                right: [{call: {
-                    function: 'make',
-                    arguments: [
-                        {symbol: 'map[string]bool'},
-                        lenOfFieldMask
-                    ]}}]
-            }},
-
-            // for _, field := range fieldMask {
-            //     fieldMaskMap[field] = true
-            // }
-            {rangeFor: {
-                variables: ['_', 'field'],
-                sequence: {symbol: 'fieldMask'},
-                body: [{assign: {
-                    left: [{index: {
-                        object: 'fieldMaskMap',
-                        index: {symbol: 'field'}
-                    }}],
-                    right: [true]
-                }}]
-            }},
-
-            // included = func(field string) bool {
-            //     return fieldMaskMap[field]
-            // }
-            {assignFunc: {
-                left: 'included',
-                parameters: [{name: 'field', type: 'string'}],
-                results: [{type: 'bool'}],
-                body: [{return: [
-                    {index: {
-                        object: 'fieldMaskMap',
-                        index: {symbol: 'field'}
-                    }}
-                ]}]
-            }}
-        ]}},
-
-        {spacer: 1}
-    ];
-}
-
-// Return the Go struct field name that would be generated for the specified
-// `protoFieldName`. The convention for protobuf message fields is to use
-// lower_snake_case (but it's not enforced), while the generated Go code uses
-// TitleCamelCase, except where parts of the input name had MaybeSomeALLCaps.
-function field2go(protoFieldName) {
-    return names.normalize(protoFieldName, 'TitleCamelCase');
-}
-
-// Return the Go struct or enum type name that would be generated for the specified
-// `protoName`, where `protoName` is the name of a protobuf message or enum.
-function messageOrEnum2go(protoName) {
-    // `basename` is e.g. for ".foo.bar.Baz" → "Baz"
-    const basename = protoName.split('.').slice(-1)[0];
-
-    return names.normalize(basename, 'TitleCamelCase');
-}
-
-// Return a string containing the Go spelling for the type corresponding to the
-// specified `okraType`. Use the specified `typePackageAlias` function to
-// determine Go package, if necessary.
-//
-// For example:
-// - {builtin: "TYPE_STRING"} → "string"
-// - {builtin: "name"} → "string"
-// - {enum: "Foo"} → "pb.Foo" (or "pb7.Foo" depending on `typePackageAlias`)
-// - {array: {builtin: "TYPE_INT64"}} → "[]int64"
-// - {builtin: ".google.protobuf.Timestamp"} → "*timestamp.Timestamp"
-// - {array: {builtin: ".google.type.Date"}} → "[]*date.Date"
-//
-function type2go({
-    // e.g. `{builtin: 'TYPE_STRING'}`, or `{array: {enum: '.Foo'}}`
-    okraType,
-
-    // function that maps message/enum type name to a Go package alias
-    typePackageAlias
-}) {
-    if (okraType.array) {
-        return `[]${type2go({okraType: okraType.array, typePackageAlias})}`;
-    }
-
-    if (okraType.enum) {
-        const enumName = messageOrEnum2go(okraType.enum);
-        const packageAlias = typePackageAlias(okraType.enum);
-        return `${packageAlias}.${enumName}`;
-    }
-
-    // See `builtin.tisch.js`.
-    return {
-        '.google.protobuf.Timestamp': '*timestamp.Timestamp',
-        '.google.type.Date': '*date.Date',
-        'TYPE_DOUBLE': 'float64',
-        'TYPE_FLOAT': 'float32',
-        'TYPE_INT64': 'int64',
-        'TYPE_UINT64': 'uint64',
-        'TYPE_INT32': 'int32',
-        'TYPE_UINT32': 'uint32',
-        'TYPE_BOOL': 'bool',
-        'TYPE_STRING': 'string',
-        'TYPE_BYTES': '[]byte'
-    }[okraType.builtin];
-}
-
-// The following functions, each named "perform ..." (e.g. performQuery,
-// performReadRow) translate a CRUD instruction into an array of Go statements
-// that are expanded into a Go function to perform the CRUD instruction. There
-// is one for each possible CRUD instruction.
-//
-// All of the "perform ..." functions assume that the following variables are
-// in scope:
-// - `message` is the protobuf message struct being read from or written to.
-//   It might be a pointer to a message or the message itself, depending on
-//    the context.
-// - `transaction` is the `*sql.Tx` object for the current database transaction.
-// - `ctx` is the `context.Context` object describing the current cancellation
-//   context.
-// - `err` is the `error` variable to assign to before returning due to an
-//   error.
-//
-// Additionally, "perform..." functions might depend on any of the following
-// variables, but will say so by invoking their `variable` parameter first
-// (i.e. these are not assumed to be in scope, but will be if indicated by a
-// call to `variable`):
-// - `parameters` is a `[]interface{}` used when specifying a variable number
-//   of parameters to a SQL command (such as the "exec-with-tuples"
-//   instruction).
-// - `rows` is a `*sql.Rows` used when iterating through SQL query results.
-// - `ok` is `bool` used to capture the success or failure of `rows.Next()`.
-//
-// If an instruction encounters an error, it will assign to `err` and then
-// return using a `return` statement without any arguments. Thus the function
-// in which the instruction is expanded must use named return values.
-
-// `cleanupFunctions` associates Go variables with functions that "clean them
-// up." Each key in `cleanupFunctions` is a JSON-serialized name/type pair, and
-// the values of `cleanupFunctions` are Go AST nodes describing the body of a
-// function (just the body) that can be deferred to clean up the variable.
-//
-// For example, if `file` is a `*os.File`, then `file.Close()` could be
-// deferred using the following statement:
-//
-//     defer func() {
-//         file.Close()
-//     }()
-//
-// That would correspond to an entry in `cleanupFunctions` with the key
-// `JSON.stringify(['file', '*os.File'])` and the value:
-//
-//     [{
-//         call: {
-//             function: {dot: ['file', 'Close']},
-//             arguments: []
-//         }
-//     }]
-//
-// Note that the value is an array, even if it contains only one statement.
-const cleanupFunctions = {
-    // When an error occurrs, we want to rollback the current transaction.
-    //
-    //     if err != nil && transaction != nil {
-    //         err = combineErrors(err, transaction.Rollback())
-    //     }
-    [JSON.stringify(['transaction', '*sql.Tx'])]: [{
-        if: {
-            condition: {and: {
-                left: {notEqual: {left: {symbol: 'err'}, right: null}},
-                right: {notEqual: {left: {symbol: 'transaction'}, right: null}}}},
-            body: [
-                // err = combineErrors(err, transaction.Rollback())
-                {assign: {
-                    left: ['err'],
-                    right: [{call: {
-                        function: 'combineErrors',
-                        arguments: [
-                            {symbol: 'err'},
-                            {call: {
-                                function: {dot: ['transaction', 'Rollback']},
-                                arguments: []
-                            }}
-                        ]
-                    }}]}}
-            ]
-    }}],
-
-    // `sql.Rows.Close()` must be called if the `Rows` were not exhausted by
-    // calls to `.Next()`, even if we subsequently rollback the associated
-    // transaction due to an error (in fact, attempting to do so without first
-    // calling `Rows.Close()` will poison the underlying database connection).
-    // `deferCleanupRows` is an array of Go statement that can appear in a
-    // deferred function to cleanup a variable named `rows`.
-    //
-    //     if rows != nil {
-    //         rows.Close()
-    //     }
-    [JSON.stringify(['rows', '*sql.Rows'])]: [{
-        if: {
-            condition: {
-                notEqual: {
-                    left: {symbol: 'rows'},
-                    right: null
-                }
-            },
-            body: [{
-                call: {
-                    function: {dot: ['rows', 'Close']},
-                    arguments: []}
-            }]
-        }
-    }]
-};
-
-// Return a `function ({name, goType})` that adds the variable with the
-// specified `name` and having the specified `goType` to `variables` if it
-// hasn't been added already. Additionally, if the variable's name and type
-// are associated with a cleanup function, a defer statement invoking the
-// cleanup function will be appended to the specified `statements`. Which
-// variables have cleanup functions is determined by the `cleanupFunctions`
-// global object.
-function variableAdder(variables) {
-    const alreadyDeclared = {};
-
-    return function({name, goType}) {
-        if (name in alreadyDeclared) {
-            return name;
-        }
-
-        // This is the first time we've seen this variable. Add it to the
-        // func's variable declarations.
-        const variable = {
-            name,
-            type: goType
-        };
-
-        // If there's a cleanup function registered for this name/type pair,
-        // then include it as well.
-        const body = cleanupFunctions[JSON.stringify([name, goType])];
-        if (body !== undefined) {
-            variable.defer = body;
-        }
-
-        variables.push(variable);
-        alreadyDeclared[name] = true;
-    };
-}
-
-// Return an a Go AST expressions for the specified `parameter` that can appear
-// as input parameters to database methods like `Query` and `Exec`. This code
-// is common to relevant CRUD instructions.
-function inputParameter2expression({parameter, typeByField, included}) {
-    if (parameter.field) {
-        const type = typeByField[parameter.field]; // okra type
-        const member = field2go(parameter.field); // Go struct field name
-        if (type.builtin === '.google.protobuf.Timestamp') {
-            return {
-                // fromTimestamp(message.someField)
-                call: {
-                    function: 'fromTimestamp',
-                    arguments: [{dot: ['message', member]}]
-                }
-            };
-        }
-        else if (type.builtin === '.google.type.Date') {
-            return {
-                // fromDate(message.someField)
-                call: {
-                    function: 'fromDate',
-                    arguments: [{dot: ['message', member]}]
-                }
-            };
-        }
-        else {
-            // message.someField
-            return {dot: ['message', member]};
-        }
-    }
-    else {
-        // Instead of referencing a field value, we're asking whether the
-        // field is involved in the current operation.
-        return included(parameter.included);
-    }
-}
-
-// Return an array of Go AST expressions, one element for each of the specified
-// `parameters`, that can appear as input parameters to database methods like
-// `Query` and `Exec`. This code is common to relevant CRUD instructions.
-function inputParameters2expressions({
-    // array of input parameters, per `ast.tisch.js`
-    parameters,
-
-    // object that maps a message field name to an okra type
-    typeByField,
-
-    // function that returns an expression for whether a field is included in the CRUD operation
-    included
-}) {
-    return parameters.map(parameter => 
-        inputParameter2expression({parameter, typeByField, included}));
-}
-
-// Return an array of statements that perform each of the specified
-// `instructions`, one after the other, in the context implied by the other
-// specified arguments.
-function performInstructions({
-    // array of CRUD instruction
-    instructions,
-
-    // object that maps a message field name to an okra type
-    typeByField,
-
-    // function that registers a specified `variable({name, goType})` and returns `name`
-    // Note that that variables that are _assumed_ to be in scope, such as
-    // `ctx`, `message`, `transaction`, and `err`, don't need to use this
-    // function. It's for variables like `rows` and `ok`.
-    variable,
-
-    // function that returns an expression for whether a field is included in the CRUD operation
-    included,
-
-    // function that maps message/enum type name to a Go package alias
-    typePackageAlias
-}) {
-    const handlerByName = {
-        'query': performQuery,
-        'read-row': performReadRow,
-        'read-array': performReadArray,
-        'exec': performExec,
-        'exec-with-tuples': performExecWithTuples
-    };
-
-    return instructions.map(instruction => {
-        const statements = handlerByName[instruction.instruction]({
-            instruction,
-            typeByField,
-            variable,
-            included,
-            typePackageAlias
-        });
-
-        // Append a blank line to separate from the next set of statements.
-        statements.push({spacer: 1});
-        return statements;
-    }).flat();
-}
-
-// This snippet of Go code is used a lot, so here it is for reuse.
-const ifErrReturn = {
-    if: {
-        condition: {
-            notEqual: {
-                left: {symbol: 'err'},
-                right: null
-            }
-        },
-        body: [{
-            return: []
-        }]
-    }
-};
+// CRUD Instructions
+// =================
+// This section contains one function for each of the CRUD instructions that
+// are combined to create the bodies of CRUD operations. An instruction is
+// something like "execute this SQL query." Each function in this section
+// returns an array of statements that can be included as part of the AST
+// returned by one of the functions in the "CRUD Operations" section.
 
 // Return an array of statements that perform the specified CRUD "query"
 // `instruction` in the context implied by the other specified arguments.
@@ -1628,53 +1114,12 @@ function performExecWithTuples({
     ];
 }
 
-function isObject(value) {
-    // Good enough. Google "javascript check if object is object literal."
-    return value !== null &&
-        Object.prototype.toString.call(value) === '[object Object]';
-}
-
-// Walk the specified `tree`, which is just a javascript value, invoking the
-// specified `visitor` with each node. The traversal is depth-first pre-order
-// (`visitor` is invoked on a node before the node's children are visited). `walk`
-// returns `undefined`.
-//
-// For example,
-//
-//     const tree = [
-//         {foo: 'hello'},
-//         {bar: [1, 2, 3], baz: 7}
-//     ];
-//
-//     let count = 0;
-//     function visit(node) {
-//         if (typeof node === number) {
-//             ++count;
-//         }
-//     }
-//
-//     walk(tree, visit);
-//
-//     console.log(`encountered ${count} numbers`);
-//
-// prints "encountered 4 numbers".
-//
-// Note that the only values that are searched for children are arrays and
-// object literals.
-function walk(tree, visit) {
-    function recur(tree) {
-        visit(tree);
-
-        if (Array.isArray(tree)) {
-            tree.forEach(recur);
-        }
-        else if (isObject(tree)) {
-            Object.values(tree).forEach(recur);
-        }
-    }
-
-    recur(tree);
-}
+// Finishers
+// =========
+// This section contains functions that walk an AST and possibly modify it. For
+// example, there's one function that walks through an AST describing a Go
+// module, and identifies references to standard packages, and inserts the
+// appropriate imports.
 
 // Search through the specified `goFile` AST for references to pre-rendered
 // functions. Add imports and toplevel declarations to `goFile` as necessary to
@@ -1770,6 +1215,619 @@ function includeStandardImports(goFile) {
     });
 
     return goFile;
+}
+
+// Utilities
+// =========
+// This section contains everything else. It's a mix of functions and constants
+// used throughout the other sections.
+
+function deepCopy(from) {
+    // JSON-compatible data only. What do you want?
+    return JSON.parse(JSON.stringify(from));
+}
+
+// Return an object
+//
+//     {
+//         protoImports: function () => {<full package>: <package alias>},
+//         typePackageAlias: function (<type name>) => <package alias>
+//     }
+//
+// where `.protoImports` is a function that returns package imports for the
+// protoc generated code of the specified `types` array, and
+// `.typePackageAlias` is a function that maps each name of the `types` to the
+// alias of the package in which that type is defined. Use the specified
+// `options` object of per-file protobuf options to associate types with Go
+// packages (using the `go_package` option). Note that the returned object is
+// stateful. Based on the type names passed to `.typePackageAlias` and on the
+// call order, the package aliases returned by `.typePackageAlias` and by
+// `.protoImports()` will differ (e.g. "a" → "pb", "b" → "pb2"; versus "b" →
+// "pb", "a" → "pb2").
+function typeImports({types, options}) {
+    // {<file>: <package>}
+    const packageByFile = Object.entries(options).reduce(
+        (packages, [file, fileOptions]) => {
+        // Protobuf JSONification changes the naming convention for fields, so
+        // it's `goPackage`, not `go_package`.
+        if (fileOptions.goPackage) {
+            // The `go_package` option supports special syntax:
+            // "some/real/name;alias" where the part after the semicolon can be
+            // different from the "name" part. We're interested in just the
+            // full package name itself, so omit any after-semicolon section.
+            const fullPackageName = fileOptions.goPackage.split(';')[0];
+            packages[file] = fullPackageName;
+        }
+        return packages;
+    }, {});
+
+    // {<type name>: <package>}
+    const packageByType = Object.values(types).reduce((byType, {file, name}) => {
+        if (file === undefined) {
+            throw Error(`Type named ${name} is not associated with a .proto ` +
+                `file, which means we can't deduce in which Go package to ` +
+                `find its generated Go code.`);
+        }
+        if (!(file in packageByFile)) {
+            throw Error(`Type named ${name} defined in proto file ${file}, ` +
+                `but that file does not declare a go_package option, so we ` +
+                `can't deduce in which Go package to find the type's ` +
+                `generated Go code.`);
+        }
+        byType[name] = packageByFile[file];
+        return byType;
+    }, {});
+
+    const packageAliases = {}; // {<package>: <alias>}
+
+    function typePackageAlias(typeName) {
+        const packageName = packageByType[typeName];
+        let alias = packageAliases[packageName];
+
+        if (alias !== undefined) {
+            return alias;
+        }
+
+        // Create a new alias. If it's the first one, call it "pb". If it's the
+        // second one, call it "pb2", etc.
+        const numMentionedPackages = Object.keys(packageAliases).length;
+        if (numMentionedPackages === 0) {
+            alias = 'pb';
+        }
+        else {
+            alias = `pb${numMentionedPackages + 1}`;
+        }
+
+        packageAliases[packageName] = alias;
+        return alias;
+    }
+
+    function protoImports() {
+        return deepCopy(packageAliases);
+    }
+
+    return {protoImports, typePackageAlias};
+}
+
+// `beginTransaction` is an array of Go statements common to all CRUD
+// operations. It begins a database transaction and returns an error if that
+// fails. It also ends with a "spacer" to set it apart from whatever
+// statements might follow.
+//
+//     transaction, err = db.BeginTx(ctx, nil)
+//     if err != nil {
+//         return
+//     }
+//
+const beginTransaction = Object.freeze([
+    // transaction, err = db.BeginTx(ctx, nil)
+    {assign: {
+        left: ['transaction', 'err'],
+        right: [{call: {
+            function: {dot: ['db', 'BeginTx']},
+            arguments: [{symbol: 'ctx'}, null]
+        }}]
+    }},
+
+    // if err != nil {
+    //     return
+    // }
+    {if: {
+        condition: {notEqual: {
+            left: {symbol: 'err'},
+            right: null
+        }},
+        body: [{return: []}]
+    }},
+
+    //
+    {spacer: 1}
+]);
+
+// `commitTransactionAndReturn` is an array of Go statements common to all
+// CRUD operations. It commits a database transaction and returns.
+//
+//     err = transaction.Commit()
+//     return
+//
+const commitTransactionAndReturn = Object.freeze([
+    // err = transaction.Commit()
+    {assign: {
+        left: ['err'],
+        right: [{
+            call: {
+                function: {dot: ['transaction', 'Commit']},
+                arguments: []
+            }
+        }]
+    }},
+
+    // return
+    {return: []}
+]);
+
+// Return an array of Go statements that set up local variables used to keep
+// track of which variables are "included" in the current CRUD operation. Use
+// the specified `variable` to register local variables.
+function inclusionBoilerplate(variable) {
+    // These are the variables used to check whether a field is "included".
+    variable({name: 'fieldMaskMap', goType: 'map[string]bool'});
+    variable({name: 'included', goType: 'func(string) bool'});
+
+    // Set up the "included" function, whose form depends on whether the
+    // `fieldMask` parameter is empty.
+    //
+    //     if len(fieldMask) == 0 {
+    //         included = func(string) bool {
+    //             return true
+    //         }
+    //     }
+    //     else {
+    //         fieldMaskMap = make(map[string]bool, len(fieldMask))
+    //         for _, field := range fieldMask {
+    //             fieldMaskMap[field] = true
+    //         }
+    //         included = func(field string) bool {
+    //             return fieldMaskMap[field]
+    //         }
+    //     }
+    const lenOfFieldMask = {call: {
+        function: 'len',
+        arguments: [{symbol: 'fieldMask'}]}};
+
+    return [{if: {
+        // if len(fieldMask) == 0 {
+        condition: {equal: {
+            left: lenOfFieldMask,
+            right: 0}},
+
+        //     included = func(string) bool {
+        //         return true
+        //     }
+        body: [{assignFunc: {
+            left: 'included',
+            parameters: [{type: 'string'}],
+            results: [{type: 'bool'}],
+            body: [{
+                return: [true]
+            }]
+        }}],
+        // else {
+        elseBody: [
+            // fieldMaskMap = make(map[string]bool, len(fieldMask))
+            {assign: {
+                left: ['fieldMaskMap'],
+                right: [{call: {
+                    function: 'make',
+                    arguments: [
+                        {symbol: 'map[string]bool'},
+                        lenOfFieldMask
+                    ]}}]
+            }},
+
+            // for _, field := range fieldMask {
+            //     fieldMaskMap[field] = true
+            // }
+            {rangeFor: {
+                variables: ['_', 'field'],
+                sequence: {symbol: 'fieldMask'},
+                body: [{assign: {
+                    left: [{index: {
+                        object: 'fieldMaskMap',
+                        index: {symbol: 'field'}
+                    }}],
+                    right: [true]
+                }}]
+            }},
+
+            // included = func(field string) bool {
+            //     return fieldMaskMap[field]
+            // }
+            {assignFunc: {
+                left: 'included',
+                parameters: [{name: 'field', type: 'string'}],
+                results: [{type: 'bool'}],
+                body: [{return: [
+                    {index: {
+                        object: 'fieldMaskMap',
+                        index: {symbol: 'field'}
+                    }}
+                ]}]
+            }}
+        ]}},
+
+        {spacer: 1}
+    ];
+}
+
+// Return the Go struct field name that would be generated for the specified
+// `protoFieldName`. The convention for protobuf message fields is to use
+// lower_snake_case (but it's not enforced), while the generated Go code uses
+// TitleCamelCase, except where parts of the input name had MaybeSomeALLCaps.
+function field2go(protoFieldName) {
+    return names.normalize(protoFieldName, 'TitleCamelCase');
+}
+
+// Return the Go struct or enum type name that would be generated for the specified
+// `protoName`, where `protoName` is the name of a protobuf message or enum.
+function messageOrEnum2go(protoName) {
+    // `basename` is e.g. for ".foo.bar.Baz" → "Baz"
+    const basename = protoName.split('.').slice(-1)[0];
+
+    return names.normalize(basename, 'TitleCamelCase');
+}
+
+// Return a string containing the Go spelling for the type corresponding to the
+// specified `okraType`. Use the specified `typePackageAlias` function to
+// determine Go package, if necessary.
+//
+// For example:
+// - {builtin: "TYPE_STRING"} → "string"
+// - {builtin: "name"} → "string"
+// - {enum: "Foo"} → "pb.Foo" (or "pb7.Foo" depending on `typePackageAlias`)
+// - {array: {builtin: "TYPE_INT64"}} → "[]int64"
+// - {builtin: ".google.protobuf.Timestamp"} → "*timestamp.Timestamp"
+// - {array: {builtin: ".google.type.Date"}} → "[]*date.Date"
+//
+function type2go({
+    // e.g. `{builtin: 'TYPE_STRING'}`, or `{array: {enum: '.Foo'}}`
+    okraType,
+
+    // function that maps message/enum type name to a Go package alias
+    typePackageAlias
+}) {
+    if (okraType.array) {
+        return `[]${type2go({okraType: okraType.array, typePackageAlias})}`;
+    }
+
+    if (okraType.enum) {
+        const enumName = messageOrEnum2go(okraType.enum);
+        const packageAlias = typePackageAlias(okraType.enum);
+        return `${packageAlias}.${enumName}`;
+    }
+
+    // See `builtin.tisch.js`.
+    return {
+        '.google.protobuf.Timestamp': '*timestamp.Timestamp',
+        '.google.type.Date': '*date.Date',
+        'TYPE_DOUBLE': 'float64',
+        'TYPE_FLOAT': 'float32',
+        'TYPE_INT64': 'int64',
+        'TYPE_UINT64': 'uint64',
+        'TYPE_INT32': 'int32',
+        'TYPE_UINT32': 'uint32',
+        'TYPE_BOOL': 'bool',
+        'TYPE_STRING': 'string',
+        'TYPE_BYTES': '[]byte'
+    }[okraType.builtin];
+}
+
+// The following functions, each named "perform ..." (e.g. performQuery,
+// performReadRow) translate a CRUD instruction into an array of Go statements
+// that are expanded into a Go function to perform the CRUD instruction. There
+// is one for each possible CRUD instruction.
+//
+// All of the "perform ..." functions assume that the following variables are
+// in scope:
+// - `message` is the protobuf message struct being read from or written to.
+//   It might be a pointer to a message or the message itself, depending on
+//    the context.
+// - `transaction` is the `*sql.Tx` object for the current database transaction.
+// - `ctx` is the `context.Context` object describing the current cancellation
+//   context.
+// - `err` is the `error` variable to assign to before returning due to an
+//   error.
+//
+// Additionally, "perform..." functions might depend on any of the following
+// variables, but will say so by invoking their `variable` parameter first
+// (i.e. these are not assumed to be in scope, but will be if indicated by a
+// call to `variable`):
+// - `parameters` is a `[]interface{}` used when specifying a variable number
+//   of parameters to a SQL command (such as the "exec-with-tuples"
+//   instruction).
+// - `rows` is a `*sql.Rows` used when iterating through SQL query results.
+// - `ok` is `bool` used to capture the success or failure of `rows.Next()`.
+// - `fieldMaskMap` is a `map[string]bool` for looking up whether a particular
+//   message field is included in the current operation.
+// - `included` is a `func(string)bool` that generalizes `fieldMaskMap` to
+//   support the "everything is included" case.
+//
+// If an instruction encounters an error, it will assign to `err` and then
+// return using a `return` statement without any arguments. Thus the function
+// in which the instruction is expanded must use named return values.
+
+// `cleanupFunctions` associates Go variables with functions that "clean them
+// up." Each key in `cleanupFunctions` is a JSON-serialized name/type pair, and
+// the values of `cleanupFunctions` are Go AST nodes describing the body of a
+// function (just the body) that can be deferred to clean up the variable.
+//
+// For example, if `file` is a `*os.File`, then `file.Close()` could be
+// deferred using the following statement:
+//
+//     defer func() {
+//         file.Close()
+//     }()
+//
+// That would correspond to an entry in `cleanupFunctions` with the key
+// `JSON.stringify(['file', '*os.File'])` and the value:
+//
+//     [{
+//         call: {
+//             function: {dot: ['file', 'Close']},
+//             arguments: []
+//         }
+//     }]
+//
+// Note that the value is an array, even if it contains only one statement.
+const cleanupFunctions = {
+    // When an error occurrs, we want to rollback the current transaction.
+    //
+    //     if err != nil && transaction != nil {
+    //         err = combineErrors(err, transaction.Rollback())
+    //     }
+    [JSON.stringify(['transaction', '*sql.Tx'])]: [{
+        if: {
+            condition: {and: {
+                left: {notEqual: {left: {symbol: 'err'}, right: null}},
+                right: {notEqual: {left: {symbol: 'transaction'}, right: null}}}},
+            body: [
+                // err = combineErrors(err, transaction.Rollback())
+                {assign: {
+                    left: ['err'],
+                    right: [{call: {
+                        function: 'combineErrors',
+                        arguments: [
+                            {symbol: 'err'},
+                            {call: {
+                                function: {dot: ['transaction', 'Rollback']},
+                                arguments: []
+                            }}
+                        ]
+                    }}]}}
+            ]
+    }}],
+
+    // `sql.Rows.Close()` must be called if the `Rows` were not exhausted by
+    // calls to `.Next()`, even if we subsequently rollback the associated
+    // transaction due to an error (in fact, attempting to do so without first
+    // calling `Rows.Close()` will poison the underlying database connection).
+    // `deferCleanupRows` is an array of Go statement that can appear in a
+    // deferred function to cleanup a variable named `rows`.
+    //
+    //     if rows != nil {
+    //         rows.Close()
+    //     }
+    [JSON.stringify(['rows', '*sql.Rows'])]: [{
+        if: {
+            condition: {
+                notEqual: {
+                    left: {symbol: 'rows'},
+                    right: null
+                }
+            },
+            body: [{
+                call: {
+                    function: {dot: ['rows', 'Close']},
+                    arguments: []}
+            }]
+        }
+    }]
+};
+
+// Return a `function ({name, goType})` that adds the variable with the
+// specified `name` and having the specified `goType` to `variables` if it
+// hasn't been added already. Additionally, if the variable's name and type
+// are associated with a cleanup function, a defer statement invoking the
+// cleanup function will be appended to the specified `statements`. Which
+// variables have cleanup functions is determined by the `cleanupFunctions`
+// global object.
+function variableAdder(variables) {
+    const alreadyDeclared = {};
+
+    return function({name, goType}) {
+        if (name in alreadyDeclared) {
+            return name;
+        }
+
+        // This is the first time we've seen this variable. Add it to the
+        // func's variable declarations.
+        const variable = {
+            name,
+            type: goType
+        };
+
+        // If there's a cleanup function registered for this name/type pair,
+        // then include it as well.
+        const body = cleanupFunctions[JSON.stringify([name, goType])];
+        if (body !== undefined) {
+            variable.defer = body;
+        }
+
+        variables.push(variable);
+        alreadyDeclared[name] = true;
+    };
+}
+
+// Return an a Go AST expressions for the specified `parameter` that can appear
+// as input parameters to database methods like `Query` and `Exec`. This code
+// is common to relevant CRUD instructions.
+function inputParameter2expression({parameter, typeByField, included}) {
+    if (parameter.field) {
+        const type = typeByField[parameter.field]; // okra type
+        const member = field2go(parameter.field); // Go struct field name
+        if (type.builtin === '.google.protobuf.Timestamp') {
+            return {
+                // fromTimestamp(message.someField)
+                call: {
+                    function: 'fromTimestamp',
+                    arguments: [{dot: ['message', member]}]
+                }
+            };
+        }
+        else if (type.builtin === '.google.type.Date') {
+            return {
+                // fromDate(message.someField)
+                call: {
+                    function: 'fromDate',
+                    arguments: [{dot: ['message', member]}]
+                }
+            };
+        }
+        else {
+            // message.someField
+            return {dot: ['message', member]};
+        }
+    }
+    else {
+        // Instead of referencing a field value, we're asking whether the
+        // field is involved in the current operation.
+        return included(parameter.included);
+    }
+}
+
+// Return an array of Go AST expressions, one element for each of the specified
+// `parameters`, that can appear as input parameters to database methods like
+// `Query` and `Exec`. This code is common to relevant CRUD instructions.
+function inputParameters2expressions({
+    // array of input parameters, per `ast.tisch.js`
+    parameters,
+
+    // object that maps a message field name to an okra type
+    typeByField,
+
+    // function that returns an expression for whether a field is included in the CRUD operation
+    included
+}) {
+    return parameters.map(parameter => 
+        inputParameter2expression({parameter, typeByField, included}));
+}
+
+// Return an array of statements that perform each of the specified
+// `instructions`, one after the other, in the context implied by the other
+// specified arguments.
+function performInstructions({
+    // array of CRUD instruction
+    instructions,
+
+    // object that maps a message field name to an okra type
+    typeByField,
+
+    // function that registers a specified `variable({name, goType})` and returns `name`
+    // Note that that variables that are _assumed_ to be in scope, such as
+    // `ctx`, `message`, `transaction`, and `err`, don't need to use this
+    // function. It's for variables like `rows` and `ok`.
+    variable,
+
+    // function that returns an expression for whether a field is included in the CRUD operation
+    included,
+
+    // function that maps message/enum type name to a Go package alias
+    typePackageAlias
+}) {
+    const handlerByName = {
+        'query': performQuery,
+        'read-row': performReadRow,
+        'read-array': performReadArray,
+        'exec': performExec,
+        'exec-with-tuples': performExecWithTuples
+    };
+
+    return instructions.map(instruction => {
+        const statements = handlerByName[instruction.instruction]({
+            instruction,
+            typeByField,
+            variable,
+            included,
+            typePackageAlias
+        });
+
+        // Append a blank line to separate from the next set of statements.
+        statements.push({spacer: 1});
+        return statements;
+    }).flat();
+}
+
+// This snippet of Go code is used a lot, so here it is for reuse.
+const ifErrReturn = {
+    if: {
+        condition: {
+            notEqual: {
+                left: {symbol: 'err'},
+                right: null
+            }
+        },
+        body: [{
+            return: []
+        }]
+    }
+};
+
+function isObject(value) {
+    // Good enough. Google "javascript check if object is object literal."
+    return value !== null &&
+        Object.prototype.toString.call(value) === '[object Object]';
+}
+
+// Walk the specified `tree`, which is just a javascript value, invoking the
+// specified `visitor` with each node. The traversal is depth-first pre-order
+// (`visitor` is invoked on a node before the node's children are visited). `walk`
+// returns `undefined`.
+//
+// For example,
+//
+//     const tree = [
+//         {foo: 'hello'},
+//         {bar: [1, 2, 3], baz: 7}
+//     ];
+//
+//     let count = 0;
+//     function visit(node) {
+//         if (typeof node === number) {
+//             ++count;
+//         }
+//     }
+//
+//     walk(tree, visit);
+//
+//     console.log(`encountered ${count} numbers`);
+//
+// prints "encountered 4 numbers".
+//
+// Note that the only values that are searched for children are arrays and
+// object literals.
+function walk(tree, visit) {
+    function recur(tree) {
+        visit(tree);
+
+        if (Array.isArray(tree)) {
+            tree.forEach(recur);
+        }
+        else if (isObject(tree)) {
+            Object.values(tree).forEach(recur);
+        }
+    }
+
+    recur(tree);
 }
 
 return {generate};
