@@ -3,7 +3,7 @@
 // - an array of Okra types, and
 // - an object of proto file options (by file)
 //
-// and returns a string containing Go source code for a module that implements
+// and returns a string containing Go source code for a package that implements
 // the CRUD operations.
 define([
     './prerendered',
@@ -41,7 +41,7 @@ define([
 // This section contains the `generate` function, which is the function
 // provided by this module.
 
-// Return a string of Go source code for a module that implements the CRUD
+// Return a string of Go source code for a Go package that implements the CRUD
 // operations indicated by the specified parameters:
 // - `crud`: an object as produced by some SQL dialect's `types2crud` function
 // - `types`: an array of Okra types
@@ -103,7 +103,7 @@ This file is generated code. Please do not modify it by hand.`;
     };
 
     // Calls to `typePackageAlias` have been helping decide which
-    // protobuf-generated Go modules need to be imported and what to call them.
+    // protobuf-generated Go packages need to be imported and what to call them.
     // `protoImports()` is the result.
     Object.assign(goFile.imports, protoImports());
 
@@ -1118,7 +1118,7 @@ function performExecWithTuples({
 // =========
 // This section contains functions that walk an AST and possibly modify it. For
 // example, there's one function that walks through an AST describing a Go
-// module, and identifies references to standard packages, and inserts the
+// package, and identifies references to standard packages, and inserts the
 // appropriate imports.
 
 // Search through the specified `goFile` AST for references to pre-rendered
