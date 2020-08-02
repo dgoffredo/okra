@@ -164,6 +164,105 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, id string) (message *pb.BoySc
 	return
 }
 
+// UpdateBoyScout updates within the specified db the fields of the specified
+// message that are indicated by the specified fieldMask, subject to
+// specified cancellation context ctx. Each element of fieldMask is the
+// name of a field in message whose value is to be used in the database
+// update. If fieldMask is empty or nil, then update all fields from
+// message. Return nil on success, or a non-nil error if an error occurs.
+func UpdateBoyScout(ctx context.Context, db *sql.DB, message pb.BoyScout, fieldMask []string) (err error) {
+	var transaction *sql.Tx
+	defer func() {
+		if err != nil && transaction != nil {
+			err = combineErrors(err, transaction.Rollback())
+		}
+	}()
+	var parameters []interface{}
+	var fieldMaskMap map[string]bool
+	var included func(string) bool
+
+	if len(fieldMask) == 0 {
+		included = func(string) bool {
+			return true
+		}
+	} else {
+		fieldMaskMap = make(map[string]bool, len(fieldMask))
+		for _, field := range fieldMask {
+			fieldMaskMap[field] = true
+		}
+		included = func(field string) bool {
+			return fieldMaskMap[field]
+		}
+	}
+
+	transaction, err = db.BeginTx(ctx, nil)
+	if err != nil {
+		return
+	}
+
+	_, err = transaction.ExecContext(ctx, "update `boy_scout` set `full_name` = case when ? then ? else `full_name` end, `short_name` = case when ? then ? else `short_name` end, `birthdate` = case when ? then ? else `birthdate` end, `join_time` = case when ? then from_unixtime(cast(? / 1000000.0 as decimal(20, 6))) else `join_time` end, `country_code` = case when ? then ? else `country_code` end, `language_code` = case when ? then ? else `language_code` end, `pack_code` = case when ? then ? else `pack_code` end, `rank` = case when ? then ? else `rank` end, `iana_country_code` = case when ? then ? else `iana_country_code` end, `what_about_this` = case when ? then ? else `what_about_this` end where `id` = ?;", included("full_name"), message.FullName, included("short_name"), message.ShortName, included("birthdate"), fromDate(message.Birthdate), included("join_time"), fromTimestamp(message.JoinTime), included("country_code"), message.CountryCode, included("language_code"), message.LanguageCode, included("pack_code"), message.PackCode, included("rank"), message.Rank, included("IANA_country_code"), message.IANACountryCode, included("whatAboutThis"), message.WhatAboutThis, message.Id)
+	if err != nil {
+		return
+	}
+
+	if included("badges") {
+		_, err = transaction.ExecContext(ctx, "delete from `boy_scout_badges` where `id` = ?;", message.Id)
+		if err != nil {
+			return
+		}
+	}
+
+	if included("badges") && len(message.Badges) != 0 {
+		parameters = nil
+		for _, element := range message.Badges {
+			parameters = append(parameters, message.Id, element)
+		}
+		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_badges`( `id`, `value`) values", "(?, ?)", len(message.Badges)), parameters...)
+		if err != nil {
+			return
+		}
+	}
+
+	if included("favorite_songs") {
+		_, err = transaction.ExecContext(ctx, "delete from `boy_scout_favorite_songs` where `id` = ?;", message.Id)
+		if err != nil {
+			return
+		}
+	}
+
+	if included("favorite_songs") && len(message.FavoriteSongs) != 0 {
+		parameters = nil
+		for _, element := range message.FavoriteSongs {
+			parameters = append(parameters, message.Id, element)
+		}
+		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_favorite_songs`( `id`, `value`) values", "(?, ?)", len(message.FavoriteSongs)), parameters...)
+		if err != nil {
+			return
+		}
+	}
+
+	if included("camping_trips") {
+		_, err = transaction.ExecContext(ctx, "delete from `boy_scout_camping_trips` where `id` = ?;", message.Id)
+		if err != nil {
+			return
+		}
+	}
+
+	if included("camping_trips") && len(message.CampingTrips) != 0 {
+		parameters = nil
+		for _, element := range message.CampingTrips {
+			parameters = append(parameters, message.Id, element)
+		}
+		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_camping_trips`( `id`, `value`) values", "(?, ?)", len(message.CampingTrips)), parameters...)
+		if err != nil {
+			return
+		}
+	}
+
+	err = transaction.Commit()
+	return
+}
+
 // CreateGirlScout adds the specified message to the specified db, subject to the
 // specified cancellation context ctx. Return nil on success, or return a
 // non-nil value if an error occurs.
@@ -231,6 +330,34 @@ func ReadGirlScout(ctx context.Context, db *sql.DB, id string) (message *pb.Girl
 		return
 	}
 	rows.Next()
+
+	err = transaction.Commit()
+	return
+}
+
+// UpdateGirlScout updates within the specified db the fields of the specified
+// message that are indicated by the specified fieldMask, subject to
+// specified cancellation context ctx. Each element of fieldMask is the
+// name of a field in message whose value is to be used in the database
+// update. If fieldMask is empty or nil, then update all fields from
+// message. Return nil on success, or a non-nil error if an error occurs.
+func UpdateGirlScout(ctx context.Context, db *sql.DB, message pb.GirlScout, fieldMask []string) (err error) {
+	var transaction *sql.Tx
+	defer func() {
+		if err != nil && transaction != nil {
+			err = combineErrors(err, transaction.Rollback())
+		}
+	}()
+
+	transaction, err = db.BeginTx(ctx, nil)
+	if err != nil {
+		return
+	}
+
+	_, err = transaction.ExecContext(ctx, "update `girl_scout` set where `id` = ?;", message.Id)
+	if err != nil {
+		return
+	}
 
 	err = transaction.Commit()
 	return

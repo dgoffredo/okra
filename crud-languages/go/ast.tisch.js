@@ -7,61 +7,73 @@
     // $a.$b.$c
     const dot = {'dot': [String, ...etc(1)]};
 
-    const expression = recursive(expression => or(
-        // any code at all, expanded verbatim into the .go file
-        {'raw': String},
-
-        // 34.54, -11, 3.454e-23
-        Number,
-
-        // "\"quoted\" as JSON, which is compatible with Go string literals"
-        // That is, the generator will do the quoting. The `String` expression
-        // does not have to be JSON serialized to begin with.
-        String,
-
-        // true, false
-        Boolean,
-
-        // nil
-        null,
-
-        // e.g. the name of a variable
-        {'symbol': String},
-
-        // $function($arguments)
-        {'call': {
-            'function': or(String, dot),
-            'arguments': [expression, ...etc],
-            // optional trailing variadic argument, e.g. `wakka` in
-            //     foo(bar, baz, wakka...)
-            'rest?': expression
+    const {expression, index} = recursive(({index, expression}) => ({
+        // $object[$index]
+        index: {'index': {
+            'object': or(String, dot),
+            'index': expression
         }},
 
-        // $type{$elements}
-        // or
-        // {$elements}
-        {'sequenceLiteral': {
-            'type?': String,
-            'elements': [expression, ...etc]
-        }},
-
-        // a.b.c
-        dot,
-        
-        // &foo
-        {'address': expression},
-        
-        // $left == $right
-        {'equal': {'left': expression, 'right': expression}},
-
-        // $left != $right
-        {'notEqual': {'left': expression, 'right': expression}},
-
-        // $left && $right
-        {'and': {'left': expression, 'right': expression}},
-        
-        // ! ...
-        {'not': expression}));
+        expression: or(
+            // any code at all, expanded verbatim into the .go file
+            {'raw': String},
+    
+            // 34.54, -11, 3.454e-23
+            Number,
+    
+            // "\"quoted\" as JSON, which is compatible with Go string
+            // literals" That is, the generator will do the quoting. The
+            // `String` expression does not have to be JSON serialized to begin
+            // with.
+            String,
+    
+            // true, false
+            Boolean,
+    
+            // nil
+            null,
+    
+            // e.g. the name of a variable
+            {'symbol': String},
+    
+            // $function($arguments)
+            {'call': {
+                'function': or(String, dot),
+                'arguments': [expression, ...etc],
+                // optional trailing variadic argument, e.g. `wakka` in
+                //     foo(bar, baz, wakka...)
+                'rest?': expression
+            }},
+    
+            // $type{$elements}
+            // or
+            // {$elements}
+            {'sequenceLiteral': {
+                'type?': String,
+                'elements': [expression, ...etc]
+            }},
+    
+            // a.b.c
+            dot,
+            
+            // &foo
+            {'address': expression},
+            
+            // $left == $right
+            {'equal': {'left': expression, 'right': expression}},
+    
+            // $left != $right
+            {'notEqual': {'left': expression, 'right': expression}},
+    
+            // $left && $right
+            {'and': {'left': expression, 'right': expression}},
+            
+            // ! ...
+            {'not': expression},
+            
+            // $object[$index]
+            index)
+    }));
 
     // $var $type
     // or
@@ -78,16 +90,36 @@
 
         // $left = $right
         {'assign': {
-            'left': [or(String, dot), ...etc], // variable names
+            'left': [or(String, dot, index), ...etc],
             'right': [expression, ...etc]
+        }},
+
+        // $left = func($parameters) $results {
+        //     $body
+        // }
+        {'assignFunc': {
+            'left': or(String, dot, index),
+            'parameters': [{'name?': String, 'type': String}, ...etc],
+            'results': [{'name?': String, 'type': String}, ...etc],
+            'body': [statement, ...etc]
         }},
 
         // if $condition {
         //     $body
         // }
+        //
+        // or
+        //
+        // if $condition {
+        //     $body
+        // }
+        // else {
+        //     $elseBody
+        // }
         {'if': {
             'condition': expression,
-            'body': [statement, ...etc]
+            'body': [statement, ...etc],
+            'elseBody?': [statement, ...etc]
         }},
 
         {'rangeFor': {
@@ -123,7 +155,7 @@
         // defer $expression
         {'defer': expression},
          
-        // A `thunk` is a zero-argument function meant to be used as a
+        // A `thunk` is a zero-parameter function meant to be used as a
         // callback. Here we combine it with Go's `defer` statement to create
         // a dedicated statement similar to D's `scope(exit)`.
         // 
@@ -143,13 +175,13 @@
             ...etc
         },
         'declarations': [or({
-            // func $name($arguments) $results {
+            // func $name($parameters) $results {
             //     $body
             // }
             'function': {
                 'documentation?': String, // commented per-line
                 'name': String,
-                'arguments': [{'name?': String, 'type': String}, ...etc],
+                'parameters': [{'name?': String, 'type': String}, ...etc],
                 'results': [{'name?': String, 'type': String}, ...etc],
                 'body': {
                     // In this subset of Go, most variables used in a function

@@ -106,6 +106,13 @@ function stringifyExpression(expression) {
             return `!(${stringifyExpression(argument)})`;
         }
     }
+    else if (expression.index) {
+        let {object, index} = expression.index;
+        if (typeof object !== 'string') {
+            object = stringifyExpression(object);
+        }
+        return `${object}[${stringifyExpression(index)}]`;
+    }
     else {
         throw Error(`Invalid AST expression: ${JSON.stringify(expression)}`);
     }
@@ -118,7 +125,7 @@ function str(text) {
     return JSON.stringify(text);
 }
 
-function stringifyArgument({name, type}) {
+function stringifyParameter({name, type}) {
     if (name) {
         return `${name} ${type}`;
     }
@@ -130,10 +137,10 @@ function stringifyArgument({name, type}) {
 function renderVariable({name, type, value}, lines) {
     // Since a variable is something like
     //     var foo type = value
-    // we can reuse the "foo type" as rendered for function arguments.
-    const argument = stringifyArgument({name, type});
+    // we can reuse the "foo type" as rendered for function parameters.
+    const parameter = stringifyParameter({name, type});
     if (value === undefined) {
-        lines.push(`var ${argument}`);
+        lines.push(`var ${parameter}`);
     }
     else {
         // This reminds me that we assume that an "expression" doesn't span
@@ -141,7 +148,7 @@ function renderVariable({name, type, value}, lines) {
         // `func` is an expression. However, for the purposes of this AST we
         // can assume that an expression renders to source code without any
         // newlines.
-        lines.push(`var ${argument} = ${stringifyExpression(value)}`);
+        lines.push(`var ${parameter} = ${stringifyExpression(value)}`);
     }
 }
 
@@ -154,7 +161,7 @@ function stringifyAssign({left: leftVars, right: rightExprs}) {
             return lvalue;
         }
         else {
-            // It's a {dot: ...}.
+            // It's a {dot: ...} or a {index: ...}
             return stringifyExpression(lvalue);
         }
     }).join(', ');
@@ -163,9 +170,18 @@ function stringifyAssign({left: leftVars, right: rightExprs}) {
     return `${leftHandSide} = ${rightHandSide}`;
 }
 
-function renderIf({condition: conditionExpr, body}, lines) {
+function renderIf({condition: conditionExpr, body, elseBody}, lines) {
     lines.push(`if ${stringifyExpression(conditionExpr)} {`);
     body.forEach(statement =>
+        renderStatement(statement, lines.indented()));
+
+    if (elseBody === undefined) {
+        lines.push('}');
+        return;
+    }
+
+    lines.push('} else {');
+    elseBody.forEach(statement =>
         renderStatement(statement, lines.indented()));
     lines.push('}');
 }
@@ -200,9 +216,28 @@ function renderDeferThunk(statements, lines) {
     lines.push('}()');
 }
 
+function renderAssignFunc({left, parameters, results, body}, lines) {
+    const leftHandSide = typeof left === 'string'
+        ? left
+        : stringifyExpression(left);
+
+    const parameterList = `(${parameters.map(stringifyParameter).join(', ')})`;
+    const resultTuple = results.length === 0
+        ? ''
+        : `(${results.map(stringifyParameter).join(', ')}) `; // +extra space 
+
+    lines.push(`${leftHandSide} = func${parameterList} ${resultTuple}{`);
+
+    body.forEach(statement => renderStatement(statement, lines.indented()));
+    lines.push('}')
+}
+
 function renderStatement(statement, lines) {
     if (statement.assign) {
         lines.push(stringifyAssign(statement.assign));
+    }
+    else if (statement.assignFunc) {
+        renderAssignFunc(statement.assignFunc, lines);
     }
     else if (statement.if) {
         renderIf(statement.if, lines);
@@ -234,11 +269,11 @@ function renderStatement(statement, lines) {
 }
 
 function renderFunction(func, lines) {
-    // See `ast.tisch.js` for the shapes of `arguments`, `variables`, etc.
+    // See `ast.tisch.js` for the shapes of `parameters`, `variables`, etc.
     const {
         documentation,
         name,
-        arguments,
+        parameters,
         results,
         body: {
             variables,
@@ -250,15 +285,16 @@ function renderFunction(func, lines) {
         renderDocumentation(documentation, lines);
     }
 
-    // func $name($arguments) $results {
+    // func $name($parameters) $results {
     //     $variables
     //     $statements
     // }
     const resultTuple = results.length === 0
         ? ''
-        : `(${results.map(stringifyArgument).join(', ')}) `; // +extra space 
+        : `(${results.map(stringifyParameter).join(', ')}) `; // +extra space 
 
-    lines.push(`func ${name}(${arguments.map(stringifyArgument).join(', ')}) ${resultTuple}{`);
+    const parameterList = `(${parameters.map(stringifyParameter).join(', ')})`;
+    lines.push(`func ${name}${parameterList} ${resultTuple}{`);
 
     // Each variable gets a `var`, but additionally might have a `defer func() ...`.
     variables.forEach(variable => {

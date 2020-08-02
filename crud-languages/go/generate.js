@@ -103,7 +103,7 @@ function typeImports({types, options}) {
 }
 
 // Return a string of Go source code for a module that implements the CRUD
-// operations indicated by the specified arguments:
+// operations indicated by the specified parameters:
 // - `crud`: an object as produced by some SQL dialect's `types2crud` function
 // - `types`: an array of Okra types
 // - `options`: an object of proto file options (by file)
@@ -157,7 +157,7 @@ This file is generated code. Please do not modify it by hand.`;
             return [
                 funcCreate(argumentsFor('create')),
                 funcRead(argumentsFor('read')),
-                // funcUpdate(message, TODO),
+                funcUpdate(argumentsFor('update')),
                 // funcDelete(message, TODO)
             ];
         }).flat()
@@ -252,7 +252,7 @@ function funcCreate({typeName, instructions, types, typePackageAlias}) {
     //     {'function': {
     //          'documentation?': String,
     //          'name': String,
-    //          'arguments': [{'name?': String, 'type': String}, ...etc],
+    //          'parameters': [{'name?': String, 'type': String}, ...etc],
     //          'results': [{'name?': String, 'type': String}, ...etc],
     //          'body': {
     //              'variables': [variable, ...etc],
@@ -281,7 +281,7 @@ function funcCreate({typeName, instructions, types, typePackageAlias}) {
 `${funcName} adds the specified message to the specified db, subject to the
 specified cancellation context ctx. Return nil on success, or return a
 non-nil value if an error occurs.`;
-    const arguments = [
+    const parameters = [
         {name: 'ctx', type: 'context.Context'},
         {name: 'db', type: '*sql.DB'},
         {name: 'message',
@@ -294,7 +294,7 @@ non-nil value if an error occurs.`;
     const func = {
         documentation,
         name: funcName,
-        arguments,
+        parameters,
         results,
         body: {
             variables,
@@ -350,7 +350,7 @@ function funcRead({typeName, instructions, types, typePackageAlias}) {
     //     {'function': {
     //          'documentation?': String,
     //          'name': String,
-    //          'arguments': [{'name?': String, 'type': String}, ...etc],
+    //          'parameters': [{'name?': String, 'type': String}, ...etc],
     //          'results': [{'name?': String, 'type': String}, ...etc],
     //          'body': {
     //              'variables': [variable, ...etc],
@@ -392,7 +392,7 @@ db, subject to the specified cancellation context ctx. On success, the
 error returned will be nil and the ${messageType} will not be nil. On
 error, the error returned will not be nil.`;
 
-    const arguments = [
+    const parameters = [
         {name: 'ctx', type: 'context.Context'},
         {name: 'db', type: '*sql.DB'},
         // `id` has whatever Go type corresponds to the designated ID field of
@@ -414,7 +414,7 @@ error, the error returned will not be nil.`;
     const func = {
         documentation,
         name: funcName,
-        arguments,
+        parameters,
         results,
         body: {
             variables,
@@ -483,6 +483,247 @@ error, the error returned will not be nil.`;
     statements.push(...commitTransactionAndReturn);
 
     return {function: func};
+}
+
+// Return a Go AST node representing a func that updates an instance of a
+// message of the specified `typeName` from the database using the specified
+// CRUD `instructions`. Use the specified `types` object of okra types by name
+// to inspect the message type and any enum types that it might depend upon.
+// Use the specified `typePackageAlias` function to look up which package
+// aliases (e.g. "pb", "p2") a given message/enum type belongs to.
+function funcUpdate({typeName, instructions, types, typePackageAlias}) {
+    // Here's a reminder of what a function (func) looks like:
+    //
+    //     {'function': {
+    //          'documentation?': String,
+    //          'name': String,
+    //          'parameters': [{'name?': String, 'type': String}, ...etc],
+    //          'results': [{'name?': String, 'type': String}, ...etc],
+    //          'body': {
+    //              'variables': [variable, ...etc],
+    //              'statements': [statement, ...etc]
+    //          }}}
+
+    // Here's what we're going for:
+    //
+    // UpdateFooBar updates within the specified db the fields of the specified
+    // message that are indicated by the specified fieldMask, subject to
+    // specified cancellation context ctx. Each element of fieldMask is the
+    // name of a field in message whose value is to be used in the database
+    // update. If fieldMask is empty or nil, then update all fields from
+    // message. Return nil on success, or a non-nil error if an error occurs.
+    // func UpdateFooBar(ctx context.Context, db *sql.DB, message pb.FooBar, fieldMask []string) (err error) {
+    //     ... other vars ...
+    //     var fieldMaskMap map[string]bool
+    //     var included func(string) bool
+    //
+    //     if len(fieldMask) == 0 {
+    //         included = func(string) bool {
+    //             return true
+    //         }
+    //     }
+    //     else {
+    //         fieldMaskMap = make(map[string]bool, len(fieldMask))
+    //         for _, field := range fieldMask {
+    //             fieldMaskMap[field] = true
+    //         }
+    //         included = func(field string) bool {
+    //             return fieldMaskMap[field]
+    //         }
+    //     }
+    //
+    //     ... instructions ...
+    // }
+
+    const funcName = `Update${messageOrEnum2go(typeName)}`;
+    const messageType =
+        `${typePackageAlias(typeName)}.${messageOrEnum2go(typeName)}`;
+
+    // {<fieldName>: <okra type>}
+    const typeByField = types[typeName].fields.reduce(
+        (byName, {name, type}) => Object.assign(byName, {[name]: type}),
+        {});
+
+    const documentation =
+`${funcName} updates within the specified db the fields of the specified
+message that are indicated by the specified fieldMask, subject to
+specified cancellation context ctx. Each element of fieldMask is the
+name of a field in message whose value is to be used in the database
+update. If fieldMask is empty or nil, then update all fields from
+message. Return nil on success, or a non-nil error if an error occurs.`;
+
+    const parameters = [
+        {name: 'ctx', type: 'context.Context'},
+        {name: 'db', type: '*sql.DB'},
+        {name: 'message', type: messageType},
+        {name: 'fieldMask', type: '[]string'}
+    ];
+    const results = [
+        {name: 'err', type: 'error'}
+    ];
+    const variables = [];
+    const statements = [];
+    const func = {
+        documentation,
+        name: funcName,
+        parameters,
+        results,
+        body: {
+            variables,
+            statements
+        }
+    };
+
+    // Define the arguments needed by the instruction handlers.
+
+    // variable({name, goType}) adds the variable with the specified name and
+    // having the specified type to the func's variable declarations section if
+    // it hasn't been added already, and returns the name of the variable.
+    const variable = variableAdder(variables);
+
+    // A variable `included` of function type will be in scope. The generated
+    // code checks whether a field is included by invoking a local function
+    // (`included`), specifying the name of the field as the function argument.
+    //
+    // If `included` is never referenced by the generated code, then it doesn't
+    // need to be defined, so also keep track of whether `included` has ever
+    // been called.
+    let defineInclusionBoilerplate = false;
+
+    function included(fieldName) {
+        defineInclusionBoilerplate = true;
+
+        return {
+            call: {
+                function: 'included',
+                arguments: [fieldName] // the literal string, quoted
+            }
+        };
+    }
+
+    // `transaction` is a variable assumed to be in scope, so add that first.
+    variable({name: 'transaction', goType: '*sql.Tx'});
+
+    statements.push(...beginTransaction);
+
+    // Generate statements that implement each instruction, and append the
+    // statements to the body of the func.
+    statements.push(...performInstructions({
+        instructions,
+        typeByField,
+        variable,
+        included,
+        typePackageAlias
+    }));
+
+    statements.push(...commitTransactionAndReturn);
+
+    // If `performInstructions`, above, made any calls to `included`, then we
+    // need to emit statements that set up the lookup map of field names that
+    // are included in the update. Prepend those statements to `statements`.
+    //
+    // When would an update function _not_ call `included`? Whenever the
+    // message type consists of only an ID field. Unlikely, but possible, and
+    // if we have unused variables in the generated Go code, it won't compile.
+    if (defineInclusionBoilerplate) {
+        statements.splice(0, 0, ...inclusionBoilerplate(variable));
+    }
+
+    return {function: func};
+}
+
+// Return an array of Go statements that set up local variables used to keep
+// track of which variables are "included" in the current CRUD operation. Use
+// the specified `variable` to register local variables.
+function inclusionBoilerplate(variable) {
+    // These are the variables used to check whether a field is "included".
+    variable({name: 'fieldMaskMap', goType: 'map[string]bool'});
+    variable({name: 'included', goType: 'func(string) bool'});
+
+    // Set up the "included" function, whose form depends on whether the
+    // `fieldMask` parameter is empty.
+    //
+    //     if len(fieldMask) == 0 {
+    //         included = func(string) bool {
+    //             return true
+    //         }
+    //     }
+    //     else {
+    //         fieldMaskMap = make(map[string]bool, len(fieldMask))
+    //         for _, field := range fieldMask {
+    //             fieldMaskMap[field] = true
+    //         }
+    //         included = func(field string) bool {
+    //             return fieldMaskMap[field]
+    //         }
+    //     }
+    const lenOfFieldMask = {call: {
+        function: 'len',
+        arguments: [{symbol: 'fieldMask'}]}};
+
+    return [{if: {
+        // if len(fieldMask) == 0 {
+        condition: {equal: {
+            left: lenOfFieldMask,
+            right: 0}},
+
+        //     included = func(string) bool {
+        //         return true
+        //     }
+        body: [{assignFunc: {
+            left: 'included',
+            parameters: [{type: 'string'}],
+            results: [{type: 'bool'}],
+            body: [{
+                return: [true]
+            }]
+        }}],
+        // else {
+        elseBody: [
+            // fieldMaskMap = make(map[string]bool, len(fieldMask))
+            {assign: {
+                left: ['fieldMaskMap'],
+                right: [{call: {
+                    function: 'make',
+                    arguments: [
+                        {symbol: 'map[string]bool'},
+                        lenOfFieldMask
+                    ]}}]
+            }},
+
+            // for _, field := range fieldMask {
+            //     fieldMaskMap[field] = true
+            // }
+            {rangeFor: {
+                variables: ['_', 'field'],
+                sequence: {symbol: 'fieldMask'},
+                body: [{assign: {
+                    left: [{index: {
+                        object: 'fieldMaskMap',
+                        index: {symbol: 'field'}
+                    }}],
+                    right: [true]
+                }}]
+            }},
+
+            // included = func(field string) bool {
+            //     return fieldMaskMap[field]
+            // }
+            {assignFunc: {
+                left: 'included',
+                parameters: [{name: 'field', type: 'string'}],
+                results: [{type: 'bool'}],
+                body: [{return: [
+                    {index: {
+                        object: 'fieldMaskMap',
+                        index: {symbol: 'field'}
+                    }}
+                ]}]
+            }}
+        ]}},
+
+        {spacer: 1}
+    ];
 }
 
 // Return the Go struct field name that would be generated for the specified

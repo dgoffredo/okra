@@ -55,5 +55,17 @@ func main() {
 		fmt.Println(tedAgain)
 		fmt.Println(err)
 	}
+
+	fmt.Println("now for the update")
+
+	// ted.FullName = "King of the Fishes"
+	var moreTed pb.BoyScout
+	moreTed.Id = ted.Id
+	moreTed.FullName = "Teddicus Piscerius" 
+	// err = crud.UpdateBoyScout(ctx, db, moreTed, []string{"full_name", "favorite_songs"})
+	err = crud.UpdateBoyScout(ctx, db, moreTed, nil)
+	fmt.Println(err)
+    // TODO: read again and print
+
 	fmt.Println("we're done")
 }
