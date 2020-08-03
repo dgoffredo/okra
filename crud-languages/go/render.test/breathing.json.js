@@ -6,7 +6,7 @@
     declarations: [{
             function: {
                 name: 'doTheThing',
-                arguments: [{
+                parameters: [{
                         name: 'whatThings',
                         type: '[]string'
                     },
@@ -46,7 +46,7 @@
         {
             function: {
                 name: 'main',
-                arguments: [],
+                parameters: [],
                 results: [],
                 body: {
                     variables: [],
@@ -54,7 +54,7 @@
                         call: {
                             function: 'doTheThing',
                             arguments: [{
-                                    slice: {
+                                    sequenceLiteral: {
                                         type: '[]string',
                                         elements: ["foo", "bar"]
                                     }
