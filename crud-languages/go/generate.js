@@ -97,7 +97,7 @@ This file is generated code. Please do not modify it by hand.`;
                 funcCreate(argumentsFor('create')),
                 funcRead(argumentsFor('read')),
                 funcUpdate(argumentsFor('update')),
-                // funcDelete(message, TODO)
+                funcDelete(argumentsFor('delete'))
             ];
         }).flat()
     };
@@ -116,9 +116,6 @@ This file is generated code. Please do not modify it by hand.`;
     // they aren't already.
     includeStandardImports(goFile);
 
-    // TODO: debug
-    // console.log(JSON.stringify(goFile, undefined, 4));
-
     return renderFile(goFile);
 }
 
@@ -135,18 +132,6 @@ This file is generated code. Please do not modify it by hand.`;
 // the specified `typePackageAlias` function to look up which package aliases
 // (e.g. "pb", "p2") a given message/enum type belongs to.
 function funcCreate({typeName, instructions, types, typePackageAlias}) {
-    // Here's a reminder of what a function (func) looks like:
-    //
-    //     {'function': {
-    //          'documentation?': String,
-    //          'name': String,
-    //          'parameters': [{'name?': String, 'type': String}, ...etc],
-    //          'results': [{'name?': String, 'type': String}, ...etc],
-    //          'body': {
-    //              'variables': [variable, ...etc],
-    //              'statements': [statement, ...etc]
-    //          }}}
-
     // Here's what we're going for:
     //
     //     ... documentation ...
@@ -177,7 +162,7 @@ non-nil value if an error occurs.`;
     ];
     const results = [{name: 'err', type: 'error'}];
     const variables = [];
-        // Begin by starting a transaction. We'll fill out the rest later.
+    // Begin by starting a transaction. We'll fill out the rest later.
     const statements = [...beginTransaction];
     const func = {
         documentation,
@@ -233,18 +218,6 @@ non-nil value if an error occurs.`;
 // Use the specified `typePackageAlias` function to look up which package
 // aliases (e.g. "pb", "p2") a given message/enum type belongs to.
 function funcRead({typeName, instructions, types, typePackageAlias}) {
-    // Here's a reminder of what a function (func) looks like:
-    //
-    //     {'function': {
-    //          'documentation?': String,
-    //          'name': String,
-    //          'parameters': [{'name?': String, 'type': String}, ...etc],
-    //          'results': [{'name?': String, 'type': String}, ...etc],
-    //          'body': {
-    //              'variables': [variable, ...etc],
-    //              'statements': [statement, ...etc]
-    //          }}}
-
     // Here's what we're going for:
     //
     //      // ... documentation ...
@@ -380,18 +353,6 @@ error, the error returned will not be nil.`;
 // Use the specified `typePackageAlias` function to look up which package
 // aliases (e.g. "pb", "p2") a given message/enum type belongs to.
 function funcUpdate({typeName, instructions, types, typePackageAlias}) {
-    // Here's a reminder of what a function (func) looks like:
-    //
-    //     {'function': {
-    //          'documentation?': String,
-    //          'name': String,
-    //          'parameters': [{'name?': String, 'type': String}, ...etc],
-    //          'results': [{'name?': String, 'type': String}, ...etc],
-    //          'body': {
-    //              'variables': [variable, ...etc],
-    //              'statements': [statement, ...etc]
-    //          }}}
-
     // Here's what we're going for:
     //
     // UpdateFooBar updates within the specified db the fields of the specified
@@ -520,7 +481,115 @@ message. Return nil on success, or a non-nil error if an error occurs.`;
     return {function: func};
 }
 
-// TODO: function funcDelete
+// Return a Go AST node representing a func that deletes an instance of a
+// message of the specified `typeName` from the database using the specified
+// CRUD `instructions`. Use the specified `types` object of okra types by name
+// to inspect the message type and any enum types that it might depend upon.
+// Use the specified `typePackageAlias` function to look up which package
+// aliases (e.g. "pb", "p2") a given message/enum type belongs to.
+function funcDelete({typeName, instructions, types, typePackageAlias}) {
+    // Here's what we're going for:
+    //
+    // // DeleteFooBar deletes the message having the specified id from the specified
+    // // db, subject to the specified cancellation context ctx. On success, the error
+    // // returned will be nil. On error, the error returned will not be nil. It is
+    // // not considered an error if there is no message having the specified id in
+    // // the database; i.e. deletions are idempotent.`;
+    // func DeleteFooBar(ctx context.Context, db *sql.DB, id int64) error {
+    //     ... other vars ...
+    //
+    //     var message pb.FooBar
+    //     message.Id = id
+    //
+    //     ... instructions ...
+    // }
+
+    // {<fieldName>: <okra type>}
+    const typeByField = types[typeName].fields.reduce(
+        (byName, {name, type}) => Object.assign(byName, {[name]: type}),
+        {});
+
+    const funcName = `Delete${messageOrEnum2go(typeName)}`;
+    const documentation =
+`${funcName} deletes the message having the specified id from the specified
+db, subject to the specified cancellation context ctx. On success, the error
+returned will be nil. On error, the error returned will not be nil. It is
+not considered an error if there is no message having the specified id in
+the database; i.e. deletions are idempotent.`;
+    const idFieldName = types[typeName].idFieldName;
+    const parameters = [
+        {name: 'ctx', type: 'context.Context'},
+        {name: 'db', type: '*sql.DB'},
+        // `id` has whatever Go type corresponds to the designated ID field of
+        // the message type.
+        {name: 'id',
+         type: type2go({
+            okraType: typeByField[idFieldName],
+            typePackageAlias
+        })}
+    ];
+    const results = [{name: 'err', type: 'error'}];
+    const variables = [];
+
+    // variable({name, goType}) adds the variable with the specified name and
+    // having the specified type to the func's variable declarations section if
+    // it hasn't been added already, and returns the name of the variable.
+    const variable = variableAdder(variables);
+
+    // The CRUD instructions are defined in terms of fields of a message type,
+    // so even if we just need to specify an ID value, it's simpler to have a
+    // full message object that contains just the ID value.
+    const messageType =
+        `${typePackageAlias(typeName)}.${messageOrEnum2go(typeName)}`;
+    variable({name: 'message', goType: messageType});
+
+    const statements = [
+        // message.Id = id
+        {assign: {
+            left: [{dot: ['message', field2go(idFieldName)]}],
+            right: [{symbol: 'id'}]
+        }},
+
+        ...beginTransaction
+    ];
+    const func = {
+        documentation,
+        name: funcName,
+        parameters,
+        results,
+        body: {
+            variables,
+            statements
+        }
+    };
+
+    // In a "delete" func, no fields are referenced, so it's an error if
+    // `included` is called.
+    function included(fieldName) {
+        throw Error('funcDelete processed an instruction that queried ' +
+            'whether a field is included, but instructions in a deletion ' +
+            'operation should not have to reference any fields. fieldName: ' +
+            fieldName);
+    }
+
+    // `transaction` is a variable assumed to be in scope, so add that first.
+    variable({name: 'transaction', goType: '*sql.Tx'});
+
+    // Generate statements that implement each instruction, and append the
+    // statements to the body of the func.
+    // TODO: going to have to create a temporary message in which to store the ID.
+    statements.push(...performInstructions({
+        instructions,
+        typeByField,
+        variable,
+        included,
+        typePackageAlias
+    }));
+
+    statements.push(...commitTransactionAndReturn);
+
+    return {function: func}
+}
 
 // CRUD Instructions
 // =================
@@ -1129,7 +1198,7 @@ function includePrerendered(goFile) {
     const referenced = {}; // set of function names
 
     function visit(node) {
-        // Here's a reminder about the shape of a "call" AST node:
+        // Here's a reminder of the shape of a "call" AST node:
         //
         //     {'call': {
         //         'function': or(String, dot),
@@ -1184,7 +1253,7 @@ function includeStandardImports(goFile) {
     const newImports = {}
 
     function visit(node) {
-        // Here's a reminder about the shape of a "call" AST node:
+        // Here's a reminder of the shape of a "call" AST node:
         //
         //     {'call': {
         //         'function': or(String, dot),

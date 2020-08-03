@@ -65,7 +65,9 @@ func main() {
 	// err = crud.UpdateBoyScout(ctx, db, moreTed, []string{"full_name", "favorite_songs"})
 	err = crud.UpdateBoyScout(ctx, db, moreTed, nil)
 	fmt.Println(err)
-    // TODO: read again and print
+
+	err = crud.DeleteBoyScout(ctx, db, moreTed.Id)
+	fmt.Println(err)
 
 	fmt.Println("we're done")
 }

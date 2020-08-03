@@ -263,6 +263,50 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message pb.BoyScout, fieldM
 	return
 }
 
+// DeleteBoyScout deletes the message having the specified id from the specified
+// db, subject to the specified cancellation context ctx. On success, the error
+// returned will be nil. On error, the error returned will not be nil. It is
+// not considered an error if there is no message having the specified id in
+// the database; i.e. deletions are idempotent.
+func DeleteBoyScout(ctx context.Context, db *sql.DB, id string) (err error) {
+	var message pb.BoyScout
+	var transaction *sql.Tx
+	defer func() {
+		if err != nil && transaction != nil {
+			err = combineErrors(err, transaction.Rollback())
+		}
+	}()
+
+	message.Id = id
+	transaction, err = db.BeginTx(ctx, nil)
+	if err != nil {
+		return
+	}
+
+	_, err = transaction.ExecContext(ctx, "delete from `boy_scout_badges` where `id` = ?;", message.Id)
+	if err != nil {
+		return
+	}
+
+	_, err = transaction.ExecContext(ctx, "delete from `boy_scout_favorite_songs` where `id` = ?;", message.Id)
+	if err != nil {
+		return
+	}
+
+	_, err = transaction.ExecContext(ctx, "delete from `boy_scout_camping_trips` where `id` = ?;", message.Id)
+	if err != nil {
+		return
+	}
+
+	_, err = transaction.ExecContext(ctx, "delete from `boy_scout` where `id` = ?;", message.Id)
+	if err != nil {
+		return
+	}
+
+	err = transaction.Commit()
+	return
+}
+
 // CreateGirlScout adds the specified message to the specified db, subject to the
 // specified cancellation context ctx. Return nil on success, or return a
 // non-nil value if an error occurs.
@@ -355,6 +399,35 @@ func UpdateGirlScout(ctx context.Context, db *sql.DB, message pb.GirlScout, fiel
 	}
 
 	_, err = transaction.ExecContext(ctx, "update `girl_scout` set where `id` = ?;", message.Id)
+	if err != nil {
+		return
+	}
+
+	err = transaction.Commit()
+	return
+}
+
+// DeleteGirlScout deletes the message having the specified id from the specified
+// db, subject to the specified cancellation context ctx. On success, the error
+// returned will be nil. On error, the error returned will not be nil. It is
+// not considered an error if there is no message having the specified id in
+// the database; i.e. deletions are idempotent.
+func DeleteGirlScout(ctx context.Context, db *sql.DB, id string) (err error) {
+	var message pb.GirlScout
+	var transaction *sql.Tx
+	defer func() {
+		if err != nil && transaction != nil {
+			err = combineErrors(err, transaction.Rollback())
+		}
+	}()
+
+	message.Id = id
+	transaction, err = db.BeginTx(ctx, nil)
+	if err != nil {
+		return
+	}
+
+	_, err = transaction.ExecContext(ctx, "delete from `girl_scout` where `id` = ?;", message.Id)
 	if err != nil {
 		return
 	}
