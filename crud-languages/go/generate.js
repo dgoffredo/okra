@@ -597,6 +597,34 @@ the database; i.e. deletions are idempotent.`;
 // something like "execute this SQL query." Each function in this section
 // returns an array of statements that can be included as part of the AST
 // returned by one of the functions in the "CRUD Operations" section.
+//
+// All of these functions assume that the following Go variables are in scope:
+// - `message` is the protobuf message struct being read from or written to.
+//   It might be a pointer to a message or the message itself, depending on
+//    the context.
+// - `transaction` is the `*sql.Tx` object for the current database transaction.
+// - `ctx` is the `context.Context` object describing the current cancellation
+//   context.
+// - `err` is the `error` variable to assign to before returning due to an
+//   error.
+//
+// Additionally, the functions might depend on any of the following variables,
+// but will say so by invoking their `variable` parameter first (i.e. these are
+// not assumed to be in scope, but will be if indicated by a call to
+// `variable`):
+// - `parameters` is a `[]interface{}` used when specifying a variable number
+//   of parameters to a SQL command (such as the "exec-with-tuples"
+//   instruction).
+// - `rows` is a `*sql.Rows` used when iterating through SQL query results.
+// - `ok` is `bool` used to capture the success or failure of `rows.Next()`.
+// - `fieldMaskMap` is a `map[string]bool` for looking up whether a particular
+//   message field is included in the current operation.
+// - `included` is a `func(string)bool` that generalizes `fieldMaskMap` to
+//   support the "everything is included" case.
+//
+// If an instruction encounters an error, it will assign to `err` and then
+// return using a `return` statement without any arguments. Thus the function
+// in which the instruction is expanded must use named return values.
 
 // Return an array of statements that perform the specified CRUD "query"
 // `instruction` in the context implied by the other specified arguments.
@@ -1589,40 +1617,6 @@ function type2go({
         'TYPE_BYTES': '[]byte'
     }[okraType.builtin];
 }
-
-// The following functions, each named "perform ..." (e.g. performQuery,
-// performReadRow) translate a CRUD instruction into an array of Go statements
-// that are expanded into a Go function to perform the CRUD instruction. There
-// is one for each possible CRUD instruction.
-//
-// All of the "perform ..." functions assume that the following variables are
-// in scope:
-// - `message` is the protobuf message struct being read from or written to.
-//   It might be a pointer to a message or the message itself, depending on
-//    the context.
-// - `transaction` is the `*sql.Tx` object for the current database transaction.
-// - `ctx` is the `context.Context` object describing the current cancellation
-//   context.
-// - `err` is the `error` variable to assign to before returning due to an
-//   error.
-//
-// Additionally, "perform..." functions might depend on any of the following
-// variables, but will say so by invoking their `variable` parameter first
-// (i.e. these are not assumed to be in scope, but will be if indicated by a
-// call to `variable`):
-// - `parameters` is a `[]interface{}` used when specifying a variable number
-//   of parameters to a SQL command (such as the "exec-with-tuples"
-//   instruction).
-// - `rows` is a `*sql.Rows` used when iterating through SQL query results.
-// - `ok` is `bool` used to capture the success or failure of `rows.Next()`.
-// - `fieldMaskMap` is a `map[string]bool` for looking up whether a particular
-//   message field is included in the current operation.
-// - `included` is a `func(string)bool` that generalizes `fieldMaskMap` to
-//   support the "everything is included" case.
-//
-// If an instruction encounters an error, it will assign to `err` and then
-// return using a `return` statement without any arguments. Thus the function
-// in which the instruction is expanded must use named return values.
 
 // `cleanupFunctions` associates Go variables with functions that "clean them
 // up." Each key in `cleanupFunctions` is a JSON-serialized name/type pair, and
