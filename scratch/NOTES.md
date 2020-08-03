@@ -1,5 +1,8 @@
 Notes
 =====
+Use Python for command line parsing, and then forward to node using
+`os.execlp`.
+
 ### Development Workflow
 - edit proto file(s)
 - generate SQL from proto(s)
