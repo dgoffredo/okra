@@ -7,3 +7,6 @@
 [submodule "node-amd-loader"]
 	path = dependencies/node-amd-loader
 	url = https://github.com/ajaxorg/node-amd-loader.git
+[submodule "dependencies/gitree"]
+	path = dependencies/gitree
+	url = https://github.com/dgoffredo/gitree.git
