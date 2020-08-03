@@ -4,8 +4,8 @@
 // 5.6.
 // The output of `dbdiff2sql` is what a database administrator would run to
 // reflect in the MySQL database changes made to protobuf type definitions.
-define(['../../schemas/schemas'], function (schemas) {
-'use strict';
+define(['../../schemas/schemas', './quote'],
+function (schemas, {quoteName, quoteString}) {
 
 // `{<table name>: table}` → `[table, ...]` such that a table comes before any
 // tables that reference it in a foreign key, i.e. you can execute `CREATE
@@ -225,19 +225,6 @@ function column2tableClause(column) {
     }
 
     return parts.join(' ');
-}
-
-function quote(quoteChar, text) {
-    const q = quoteChar;
-    return q + text.replace(q, q + q) + q;
-}
-
-function quoteName(text) {
-    return quote('`', text);
-}
-
-function quoteString(text) {
-    return quote("'", text);
 }
 
 function type2sql(type) {
