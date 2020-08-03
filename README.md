@@ -27,6 +27,11 @@ TODO
 
 ![](images/dataflow.svg)
 
+Try this:
+```console
+$ bin/proto2go --json '{"protoFiles": ["scratch/scouts.proto"], "protoIncludePaths": ["scratch/src"]}'
+```
+
 More
 ----
 ### Dependencies

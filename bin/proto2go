@@ -1,0 +1,71 @@
+#!/usr/bin/env node
+'use strict';
+
+// Print Go code to perform create/read/update/delete (CRUD) operations on a
+// MySQL 5.6 database for the message types in the specified protocol buffer
+// schema.
+//
+// Usage:
+//
+// $ proto2go <.proto file>
+//
+// # JSON arguments to `proto2types` function 
+// $ proto2sql --json '{ ... json arguments ... }'
+
+// Patch node's "require" system to allow for "define"-based modules.
+require('../dependencies/node-amd-loader/amd-loader');
+
+const {proto2types} = require('../lib/proto2types');
+const {types2tables} = require('../lib/types2tables');
+const {types2crud} = require('../sql-dialects/mysql5.6/types2crud');
+const {generate} = require('../crud-languages/go/generate');
+const process = require('process');
+
+const [node, script, ...args] = process.argv;
+let argsObject;
+
+if (args.length > 2) {
+    console.error(`Specified ${args.length} arguments, when one or two are expected.`);
+    process.exit(1);
+}
+else if (args.length === 0 || (args.length === 2 && args[0] !== '--json')) {
+    console.error('Specify either a .proto file path, or --json {...}');
+    process.exit(2);
+}
+else if (args.length === 2) {
+    argsObject = JSON.parse(args[1]);
+}
+else {
+    argsObject = {'protoFiles': [args[0]]};
+}
+
+// proto2types ::→ {types, options}
+// types2tables ::→ {tables, legends}
+// types2crud  ::→ {<type>: {<operation>: [<instruction>, ...]}}
+
+const {types, options} = proto2types(argsObject);
+const {legends} = types2tables(types);
+
+// `types2crud` expects an object with the following shape:
+//
+//     {
+//         [Any]: {
+//             'type': schemas.type
+//             'legend?': schemas.legend
+//         },
+//         ...etc
+//     }
+//
+const crud = types2crud(
+    Object.fromEntries(
+        types.map(type => {
+            const entry = {type};
+            const legend = legends[type.name];
+            if (legend !== undefined) {
+                entry.legend = legend;
+            }
+            return [type.name, entry];
+        })));
+
+const goFile = generate({crud, types, options});
+console.log(goFile);
