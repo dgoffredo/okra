@@ -577,7 +577,6 @@ the database; i.e. deletions are idempotent.`;
 
     // Generate statements that implement each instruction, and append the
     // statements to the body of the func.
-    // TODO: going to have to create a temporary message in which to store the ID.
     statements.push(...performInstructions({
         instructions,
         typeByField,
