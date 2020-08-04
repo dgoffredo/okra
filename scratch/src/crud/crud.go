@@ -105,8 +105,8 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, id string) (message *pb.BoySc
 	if err != nil {
 		return
 	}
-
 	ok = rows.Next()
+
 	if !ok {
 		err = fmt.Errorf("Unable to read row from database. There is no row.")
 		return
@@ -122,8 +122,9 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, id string) (message *pb.BoySc
 	if err != nil {
 		return
 	}
+	ok = rows.Next()
 
-	for rows.Next() {
+	for ; ok; ok = rows.Next() {
 		var temp pb.Badge
 		err = rows.Scan(&temp)
 		if err != nil {
@@ -136,8 +137,9 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, id string) (message *pb.BoySc
 	if err != nil {
 		return
 	}
+	ok = rows.Next()
 
-	for rows.Next() {
+	for ; ok; ok = rows.Next() {
 		var temp string
 		err = rows.Scan(&temp)
 		if err != nil {
@@ -150,8 +152,9 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, id string) (message *pb.BoySc
 	if err != nil {
 		return
 	}
+	ok = rows.Next()
 
-	for rows.Next() {
+	for ; ok; ok = rows.Next() {
 		var temp *date.Date
 		err = rows.Scan(intoDate(&temp))
 		if err != nil {
@@ -362,8 +365,8 @@ func ReadGirlScout(ctx context.Context, db *sql.DB, id string) (message *pb.Girl
 	if err != nil {
 		return
 	}
-
 	ok = rows.Next()
+
 	if !ok {
 		err = fmt.Errorf("Unable to read row from database. There is no row.")
 		return

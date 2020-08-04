@@ -13,11 +13,8 @@ define([
     '../../lib/names'],
     function (prerendered, {renderFile}, tisch, schemas, names) {
 
-// The code in this file is divided into five sections. Since there's a lot of
-// code, I hope that the organization will aid navigation.
-//
-// Each section is headed with a markdown-style comment. Here is a summary of
-// the sections:
+// The code in this file is divided into five sections. Each section is headed
+// with a markdown-style comment. Here is a summary of the sections:
 //
 // - "Generate" contains only the `generate` function, which is the function
 //   provided by this module.
@@ -601,7 +598,7 @@ the database; i.e. deletions are idempotent.`;
 // All of these functions assume that the following Go variables are in scope:
 // - `message` is the protobuf message struct being read from or written to.
 //   It might be a pointer to a message or the message itself, depending on
-//    the context.
+//   the operation.
 // - `transaction` is the `*sql.Tx` object for the current database transaction.
 // - `ctx` is the `context.Context` object describing the current cancellation
 //   context.
@@ -658,6 +655,7 @@ function performQuery({
     //     if err != nil {
     //         return
     //     }
+    //     ok = rows.Next()
 
     const parameters = inputParameters2expressions({
         parameters: instruction.parameters,
@@ -665,8 +663,9 @@ function performQuery({
         included
     });
 
-    // The following code references this variable.
+    // The following code references these variables.
     variable({name: 'rows', goType: '*sql.Rows'})
+    variable({name: 'ok', goType: 'bool'})
 
     return [
         // rows, err = transaction.QueryContext(ctx, $query, $parameters)
@@ -687,7 +686,18 @@ function performQuery({
         // if err != nil {
         //     return
         // }
-        ifErrReturn
+        ifErrReturn,
+
+        // ok = rows.Next()
+        {assign: {
+            left: ['ok'],
+            right: [{
+                call: {
+                    function: {dot: ['rows', 'Next']},
+                    arguments: []
+                }
+            }]
+        }}
     ]
 }
 
@@ -723,7 +733,6 @@ function performReadRow({
     
     // Here's what we're going for:
     //
-    //     ok = rows.Next()
     //     if !ok {
     //         err = fmt.Errorf("Unable to read row from database. There is no row.")
     //         return
@@ -767,17 +776,6 @@ function performReadRow({
     variable({name: 'ok', goType: 'bool'})
 
     return [
-        // ok = rows.Next()
-        {assign: {
-            left: ['ok'],
-            right: [{
-                call: {
-                    function: {dot: ['rows', 'Next']},
-                    arguments: []
-                }
-            }]
-        }},
-
         // if !ok {
         //     err = fmt.Errorf("Unable to read row from database. There is no row.")
         //     return
@@ -857,7 +855,7 @@ function performReadArray({
     
     // Here's what we're going for:
     //
-    //     for rows.Next() {
+    //     for ; ok; ok = rows.Next() {
     //         var temp whateverGoType
     //         err = rows.Scan(&temp) // might use intoDate or intoTimestamp
     //         if err != nil {
@@ -897,14 +895,17 @@ function performReadArray({
     variable({name: 'rows', goType: '*sql.Rows'});
 
     return [{
-        // for rows.Next() {
-        conditionFor: {
-            condition: {
-                call: {
-                    function: {dot: ['rows', 'Next']},
-                    arguments: []
-                }
-            },
+        // for ; ok; ok = rows.Next() {
+        iterationFor: {
+            condition: {symbol: 'ok'},
+            post: {assign: {
+                left: ['ok'],
+                right: [{
+                    call: {
+                        function: {dot: ['rows', 'Next']},
+                        arguments: []
+                    }
+                }]}},
             body: [
                 // var temp whateverGoType
                 {variable: {

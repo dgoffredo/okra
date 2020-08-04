@@ -138,6 +138,16 @@
             'condition': expression,
             'body': [statement, ...etc]
         }},
+
+        {'iterationFor': {
+            // for $init; $condition; $post {
+            //     $body
+            // }
+            'init?': statement,
+            'condition?': expression,
+            'post?': statement,
+            'body': [statement, ...etc]
+        }},
         
         // return $expression, ...
         {'return': [expression, ...etc]},

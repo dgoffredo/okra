@@ -200,6 +200,23 @@ function renderConditionFor({condition, body}, lines) {
     lines.push('}');
 }
 
+function stringifyStatement(statement) {
+    const lines = linePrinter();
+    renderStatement(statement, lines);
+    return lines.render();
+}
+
+function renderIterationFor({init, condition, post, body}, lines) {
+    init = init === undefined ? '' : stringifyStatement(init);
+    condition = condition === undefined ? '' : stringifyExpression(condition);
+    post = post === undefined ? '' : stringifyStatement(post);
+
+    lines.push(`for ${[init, condition, post].join('; ')} {`);
+    body.forEach(statement =>
+        renderStatement(statement, lines.indented()));
+    lines.push('}');
+}
+
 function stringifyReturn(expressions) {
     if (expressions.length === 0) {
         return `return`;
@@ -247,6 +264,9 @@ function renderStatement(statement, lines) {
     }
     else if (statement.conditionFor) {
         renderConditionFor(statement.conditionFor, lines);
+    }
+    else if (statement.iterationFor) {
+        renderIterationFor(statement.iterationFor, lines);
     }
     else if (statement.return) {
         lines.push(stringifyReturn(statement.return));
