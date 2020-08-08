@@ -352,12 +352,12 @@ error, the error returned will not be nil.`;
 function funcUpdate({typeName, instructions, types, typePackageAlias}) {
     // Here's what we're going for:
     //
-    // UpdateFooBar updates within the specified db the fields of the specified
-    // message that are indicated by the specified fieldMask, subject to
-    // specified cancellation context ctx. Each element of fieldMask is the
-    // name of a field in message whose value is to be used in the database
-    // update. If fieldMask is empty or nil, then update all fields from
-    // message. Return nil on success, or a non-nil error if an error occurs.
+    // // UpdateFooBar updates within the specified db the fields of the specified
+    // // message that are indicated by the specified fieldMask, subject to
+    // // specified cancellation context ctx. Each element of fieldMask is the
+    // // name of a field in message whose value is to be used in the database
+    // // update. If fieldMask is empty or nil, then update all fields from
+    // // message. Return nil on success, or a non-nil error if an error occurs.
     // func UpdateFooBar(ctx context.Context, db *sql.DB, message pb.FooBar, fieldMask []string) (err error) {
     //     ... other vars ...
     //     var fieldMaskMap map[string]bool
@@ -1728,6 +1728,7 @@ function variableAdder(variables) {
 
         variables.push(variable);
         alreadyDeclared[name] = true;
+        return name;
     };
 }
 

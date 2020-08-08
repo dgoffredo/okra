@@ -1,0 +1,90 @@
+#!/usr/bin/env node
+'use strict';
+
+// The `json` option is required: --json '{...}'
+//
+//     {
+//         idFields: [...], // shared by "before" and "after"
+//         
+//         // Options for the directory tree of the "before" protos
+//         protoFilesAfter: [...],
+//         protoIncludePathsAfter: [...],
+//         rootTypesAfter: [...],
+//     
+//         // Options for the directory tree of the "after" protos
+//         protoFilesBefore: [...],
+//         protoIncludePathsBefore: [...],
+//         rootTypesBefore: [...]
+//     }
+//
+
+// Patch node's "require" system to allow for "define"-based modules.
+require('../dependencies/node-amd-loader/amd-loader');
+
+const {proto2types} = require('../lib/proto2types');
+const {types2tables} = require('../lib/types2tables');
+const {dbdiff} = require('../lib/dbdiff');
+const {dbdiff2sql} = require('../sql-dialects/mysql5.6/dbdiff2sql.js');
+const process = require('process');
+
+const [node, script, ...args] = process.argv;
+
+if (args.length !== 2) {
+    console.error(`Specified ${args.length} arguments, when two are expected.`);
+    process.exit(1);
+}
+else if (args[0] !== '--json') {
+    console.error('Specify --json {...}');
+    process.exit(2);
+}
+
+const argsObject = JSON.parse(args[1]);
+const {
+    idFields = {}, // shared by "before" and "after"
+    
+    // Options for the directory tree of the "after" protos
+    protoFilesBefore,
+    protoIncludePathsBefore = [],
+    rootTypesBefore = [],
+
+    // Options for the directory tree of the "after" protos
+    protoFilesAfter,
+    protoIncludePathsAfter = [],
+    rootTypesAfter = []
+} = argsObject;
+
+// [{before..}, {after...}]
+const argumentSets = [
+    // before
+    {
+        idFields,
+        protoFiles: protoFilesBefore,
+        protoIncludePaths: protoIncludePathsBefore,
+        // rootTypes: rootTypesBefore
+    },
+
+    // after
+    {
+        idFields,
+        protoFiles: protoFilesAfter,
+        protoIncludePaths: protoIncludePathsAfter,
+        // rootTypes: rootTypesAfter
+    }
+];
+
+// console.log(argumentSets);
+
+const [before, after] = argumentSets.map(args => {
+    const {types, options} = proto2types(args);
+    const {tables, legends} = types2tables(types);
+    return tables;
+});
+// console.log(before);
+// console.log(after);
+
+const diff = dbdiff(before, after); 
+// console.log(diff);
+const sql = dbdiff2sql(diff);
+
+console.log(sql);
+

@@ -24,7 +24,13 @@ function topologicallySortedTables(tables) {
 
         table.columns.forEach(column => {
             if (column.foreignKey) {
-                visit(tables[column.foreignKey.table]);
+                // The referred-to table might not be among `tables`. In that
+                // case, skip it, it's an existing table that we don't need to
+                // visit. Otherwise, visit the referred-to table.
+                const foreignTable = tables[column.foreignKey.table];
+                if (foreignTable !== undefined) {
+                    visit(foreignTable);
+                }
             }
         });
 
