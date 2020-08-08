@@ -2,7 +2,7 @@ define([], function () {
 
 // Some parts of the generated Go code do not change based on the input, but
 // are conditionally included in the output based on what's in the input.
-// 
+//
 // For example, if no protobuf type in the input has a timestamp-valued field,
 // then the code for marshaling timestamps does not need to be included. If
 // there _are_ timestamp-valued fields in the input, then several
@@ -25,7 +25,7 @@ define([], function () {
 //             'declarations': [
 //                 <declaration as defined in ast.tisch.js>,
 //                 ...etc
-//             ] 
+//             ]
 //         }
 //     }
 //
@@ -45,8 +45,8 @@ const prerenderedDeclarations = {
         declarations: [
             {raw:
 `type timestampScanner struct {
-	 intermediary sql.NullInt64 // microseconds since unix epoch
-	 destination **timestamp.Timestamp
+	intermediary sql.NullInt64 // microseconds since unix epoch
+	destination  **timestamp.Timestamp
 }`
             },
             {raw:
@@ -63,7 +63,7 @@ const prerenderedDeclarations = {
 		microsecondsSinceEpoch := scanner.intermediary.Int64
 		*scanner.destination = &timestamp.Timestamp{
 			Seconds: microsecondsSinceEpoch / 1_000_000,
-			Nanos: int32(microsecondsSinceEpoch % 1_000_000) * 1000}
+			Nanos:   int32(microsecondsSinceEpoch%1_000_000) * 1000}
 	}
 
 	return nil
@@ -95,7 +95,7 @@ func intoTimestamp(destination **timestamp.Timestamp) timestampScanner {
             {raw:
 `type dateScanner struct {
 	intermediary sql.NullString // YYYY-MM-DD
-	destination **date.Date
+	destination  **date.Date
 }`
             },
             {raw:
@@ -111,7 +111,7 @@ func intoTimestamp(destination **timestamp.Timestamp) timestampScanner {
 	} else {
 		dateString := scanner.intermediary.String
 		var result date.Date
-		
+
 		n, err := fmt.Sscanf(dateString, "%d-%d-%d", &result.Year, &result.Month, &result.Day)
 		if err != nil {
 			return err
@@ -160,13 +160,12 @@ type timestampValuer struct {
             },
             {raw:
 `func (valuer timestampValuer) Value() (driver.Value, error) {
-    if valuer.source == nil {
+	if valuer.source == nil {
 		return nil, nil
 	}
 
 	ts := *valuer.source
-	var microsecondsSinceEpoch int64 =
-		ts.Seconds * 1_000_000 + int64(ts.Nanos) / 1000
+	var microsecondsSinceEpoch int64 = ts.Seconds*1_000_000 + int64(ts.Nanos)/1000
 
 	return driver.Value(microsecondsSinceEpoch), nil
 }`
@@ -230,7 +229,7 @@ func fromDate(source *date.Date) dateValuer {
             'strings': null
         },
         declarations: [
-            {raw: 
+            {raw:
 `// CompositeError is an error type that contains zero or more error types.
 type CompositeError []error`},
             {raw:
@@ -287,7 +286,7 @@ type CompositeError []error`},
 func withTuples(sqlStatement string, sqlTuple string, numTuples int) string {
 	if numTuples < 1 {
 		panic(fmt.Sprintf("withTuples requires at least one tuple, but %d were specified",
-		    numTuples))
+			numTuples))
 	}
 
 	var builder strings.Builder
@@ -298,7 +297,7 @@ func withTuples(sqlStatement string, sqlTuple string, numTuples int) string {
 		builder.WriteString(", ")
 		builder.WriteString(sqlTuple)
 	}
-	
+
 	return builder.String()
 }`
             }

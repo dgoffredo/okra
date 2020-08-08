@@ -9,7 +9,7 @@ function linePrinter({lines=[], indentLevel=0, tab='\t'}={}) {
     return {
         push: function (...linesToAdd) {
             lines.push(...linesToAdd.map(
-                line => `${tab.repeat(indentLevel)}${line}`));
+                line => `${tab.repeat(indentLevel)}${line}`.trimRight()));
         },
         indented: function () {
             return linePrinter({lines, indentLevel: indentLevel + 1, tab});
@@ -239,9 +239,7 @@ function renderAssignFunc({left, parameters, results, body}, lines) {
         : stringifyExpression(left);
 
     const parameterList = `(${parameters.map(stringifyParameter).join(', ')})`;
-    const resultTuple = results.length === 0
-        ? ''
-        : `(${results.map(stringifyParameter).join(', ')}) `; // +extra space 
+    const resultTuple = stringifyResults(results);
 
     lines.push(`${leftHandSide} = func${parameterList} ${resultTuple}{`);
 
@@ -288,6 +286,22 @@ function renderStatement(statement, lines) {
     }
 }
 
+function stringifyResults(results) {
+    const resultStrings = results.map(stringifyParameter);
+
+    if (results.length === 0) {
+        return '';
+    }
+    // If there is more than one parameter, or if any parameter has a variable
+    // name, then we need parentheses around the results. Otherwise we don't.
+    else if (results.length > 1 || 'name' in results[0]) {
+        return `(${resultStrings.join(', ')}) `; // +space
+    }
+    else {
+        return resultStrings[0] + ' '; // +space
+    }
+}
+
 function renderFunction(func, lines) {
     // See `ast.tisch.js` for the shapes of `parameters`, `variables`, etc.
     const {
@@ -309,12 +323,8 @@ function renderFunction(func, lines) {
     //     $variables
     //     $statements
     // }
-    const resultTuple = results.length === 0
-        ? ''
-        : `(${results.map(stringifyParameter).join(', ')}) `; // +extra space 
-
     const parameterList = `(${parameters.map(stringifyParameter).join(', ')})`;
-    lines.push(`func ${name}${parameterList} ${resultTuple}{`);
+    lines.push(`func ${name}${parameterList} ${stringifyResults(results)}{`);
 
     // Each variable gets a `var`, but additionally might have a `defer func() ...`.
     variables.forEach(variable => {
