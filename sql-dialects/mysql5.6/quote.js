@@ -2,17 +2,12 @@
 define([], function () {
 'use strict';
 
-function quote(quoteChar, text) {
-    const q = quoteChar;
-    return q + text.replace(q, q + q) + q;
-}
-
 function quoteName(text) {
-    return quote('`', text);
+    return '`' + text.replace(/`/g, '``') + '`';
 }
 
 function quoteString(text) {
-    return quote("'", text);
+    return "'" + text.replace(/'/g, "''") + "'";
 }
 
 return {
