@@ -39,7 +39,7 @@ func main() {
 		Rank:            pb.Rank_RANK_BOY_SCOUT,
 		Badges:          []pb.Badge{pb.Badge_BADGE_BALLET},
 		FavoriteSongs:   []string{"The Things - Something", "The Things - Do the Thing"},
-		IANACountryCode: "TODO",
+		IANACountryCode: "whatever",
 		WhatAboutThis:   42,
 		// do we end up with an array of pointers?
 		CampingTrips: nil}
