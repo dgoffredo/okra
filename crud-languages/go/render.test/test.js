@@ -28,5 +28,9 @@ astPaths.forEach(astPath => {
     // TODO: This is not yet a test.
     // I'll want to write a diff function, which I'll want a tempfile function
     // for...
-    console.log(goSource);
+
+    // TODO: This isn't a unit test yet, we just print things. It's still
+    // test-like, though, in that we're testing whether an exception is thrown. So,
+    // I comment out the log line below as not to spam the output of`bin/test`.
+    // console.log(goSource);
 });

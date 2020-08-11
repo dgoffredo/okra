@@ -26,7 +26,10 @@ function pretty(value) {
 }
 
 // TODO: hack hack
-console.log(
+// TODO: This isn't a unit test yet, we just print things. It's still
+// test-like, though, in that we're testing whether an exception is thrown. So,
+// I comment out the log line below as not to spam the output of`bin/test`.
+// console.log(
     pretty(
         types2crud(
             Object.fromEntries(
@@ -34,7 +37,8 @@ console.log(
                     type.name,
                     // ugh
                     {type, ...(type.name in legends? {legend: legends[type.name]} : {})}
-                ])))));
+                ]))))
+// );
 
 const newTypes = proto2types({
     protoFiles: [__dirname + '/enum-array-field-2.proto']
@@ -53,4 +57,7 @@ if (true) {
     sql = dbdiff2sql(dbdiff(tables, newTables));
 }
 
-console.log(sql);
+// TODO: This isn't a unit test yet, we just print things. It's still
+// test-like, though, in that we're testing whether an exception is thrown. So,
+// I comment out the log line below as not to spam the output of`bin/test`.
+// console.log(sql);
