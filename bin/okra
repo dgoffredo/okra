@@ -30,6 +30,11 @@ def add_common_arguments(parser):
         'directory to search for .proto files; may be specified more than once'
     )
 
+    parser.add_argument('--dialect',
+                        choices=['mysql5.6'],
+                        default='mysql5.6',
+                        help='SQL dialect to generate ("mysql5.6" by default)')
+
     parser.add_argument('proto_files',
                         metavar='proto',
                         nargs='+',
@@ -57,11 +62,6 @@ def parse_options(args):
         metavar='from',
         help=
         'git refspec from which to migrate (or "-" to generate from scratch)')
-    migrate.add_argument(
-        '--dialect',
-        choices=['mysql5.6'],
-        default='mysql5.6',
-        help='SQL dialect to generate ("mysql5.6" by default)')
     add_common_arguments(migrate)
 
     crud = subparsers.add_parser(
@@ -98,6 +98,8 @@ def migrate(options):
     that migrates a database from the "before" to the "after." Print the SQL
     to standard output.
     """
+    assert options.dialect == 'mysql5.6'
+
     # If `from_refspec` (the refspec of the "old version") is "-", then it's
     # not a migration; just generate SQL for all of the types.
     if options.from_refspec == '-':
@@ -156,6 +158,26 @@ def migrate(options):
 
         command = [script('proto2migration'), '--json', json.dumps(json_arg)]
         sys.exit(subprocess.run(command).returncode)
+
+
+def crud(options):
+    """Generate create/read/update/delete (CRUD) database accessor code for
+    the protobuf types and in the programming language specified by `options`.
+    Print the resulting code to standard output.
+    """
+    assert options.language == 'go'
+    assert options.dialect == 'mysql5.6'
+
+    json_arg = {'protoFiles': options.proto_files}
+    if options.id_fields is not None:
+        json_arg['idFields'] = json.loads(options.id_fields)
+    if options.root_types not in (None, []):
+        json_arg['rootTypes'] = options.root_types
+    if options.include_paths is not None:
+        json_arg['protoIncludePaths'] = options.include_paths
+
+    command = [script('proto2go'), '--json', json.dumps(json_arg)]
+    sys.exit(subprocess.run(command).returncode)
 
 
 def main(args):
