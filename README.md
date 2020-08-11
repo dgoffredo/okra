@@ -25,12 +25,13 @@ How
 ---
 ![](images/dataflow.svg)
 
-`.proto` files go in,  SQL or CRUD code comes out.
+`.proto` files go in, Structured Query Language (SQL) or
+create/read/update/delete (CRUD) code comes out.
 
-The command line interface is the script `bin/okra`. It's a multi-tool with two
-subcommands:
+The command line interface is the script [bin/okra](bin/okra). It's a
+multi-tool with two subcommands:
 - `okra migrate` produces SQL reflecting modifications to specified `.proto`
-  files.
+  files. Currently only MySQL 5.6 is supported.
 - `okra crud` produces create/read/update/delete (CRUD) database accessor code
   in some programming language. Currently only Go is supported.
 
@@ -95,7 +96,7 @@ The resulting SQL or Go code is printed to standard output.
 
 More
 ----
-### Dependencies
+### System Dependencies
 - Node.js v12
 - protoc (the protocol buffer compiler and its Python libraries)
 - Python 3
@@ -132,8 +133,10 @@ into SQL code that creates and/or modifies those tables in a SQL database,
 and additionally into database operations that a CRUD language can then use
 to generate CRUD code.
 
+Currently only MySQL 5.6 is implemented.
+
 #### `lib/`
-[lib](lib) contains code independent of a particular CRUD language or SQL
+[lib](lib) contains code independent of any particular CRUD language or SQL
 dialect.
 
 #### `schemas/`
@@ -145,6 +148,12 @@ the type system used by this project.
 
 [Typescript interfaces][3] would be a reasonable replacement.
 
+#### `dependencies/`
+[dependencies](dependencies) contains git submodules that are the code
+dependencies of this project. Okra does not use [npm][4], and accordingly has
+no `package.json` file. All dependencies are "in tree" (as git submodules).
+
 [1]: https://github.com/nvm-sh/nvm
 [2]: https://github.com/dgoffredo/tisch
 [3]: https://www.typescriptlang.org/docs/handbook/interfaces.html
+[4]: https://www.npmjs.com/
