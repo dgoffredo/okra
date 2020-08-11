@@ -116,6 +116,22 @@ protocol buffer compiler can be installed using `apt`:
 $ sudo apt install -y protobuf-compiler python3 python3-protobuf
 ```
 
+### Testing
+```console
+$ bin/test
+Running test driver lib/types2tables.test/test.js...
+All 5 tests passed.
+Running test driver lib/proto2types.test/test.js...
+All 7 tests passed.
+Running test driver lib/dbdiff.test/test.js...
+All 1 tests passed.
+Running test driver crud-languages/go/render.test/test.js...
+Running test driver crud-languages/go/generate.test/test.js...
+Running test driver sql-dialects/mysql5.6/dbdiff2sql.test/test.js...
+
+All tests passed.
+```
+
 ### A Tour of the Code
 
 #### `crud-languages/`
