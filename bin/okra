@@ -51,7 +51,7 @@ def add_common_arguments(parser):
 
 def parse_options(args):
     parser = argparse.ArgumentParser(
-        description='SQL support for protobol buffers')
+        description='SQL support for protocol buffers')
     subparsers = parser.add_subparsers(dest='command')
     subparsers.required = True
 
