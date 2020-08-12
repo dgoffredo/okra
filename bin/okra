@@ -12,8 +12,9 @@ import subprocess
 import sys
 import tempfile
 
-# See https://stackoverflow.com/questions/3718657
-BIN = os.path.dirname(os.path.abspath(__file__))
+# BIN of the actual Okra source code repository -- not whatever `bin/` might
+# contain a symlink to us.
+BIN = os.path.dirname(os.path.realpath(__file__))
 
 
 def script(name):
