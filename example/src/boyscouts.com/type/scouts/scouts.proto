@@ -32,9 +32,8 @@ message BoyScout {
 
 message GirlScout {
     string id = 1; // RFC 4122 UUID
-    // TODO: They're the same as Boy Scouts. Maybe refactor into "Scout"
-    // message and have a gender field. Trouble is, they're different
-    // organizations.
+    // They're the same as Boy Scouts. Maybe refactor into "Scout" message and
+    // have a gender field. Trouble is, they're different organizations.
 }
 
 enum Rank {
