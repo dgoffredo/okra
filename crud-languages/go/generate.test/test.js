@@ -9,7 +9,7 @@ require('../../../dependencies/node-amd-loader/amd-loader');
 const {proto2types} = require('../../../lib/proto2types');
 const {types2tables} = require('../../../lib/types2tables');
 const {types2crud} = require('../../../sql-dialects/mysql5.6/types2crud');
-const {generateUnrendered} = require('../generate');
+const {generate, generateUnrendered} = require('../generate');
 
 // proto2types for boyscouts → {types, options}
 // types2tables to get legends → {tables, legends}
@@ -62,5 +62,8 @@ const crud = types2crud(
 // console.error(JSON.stringify(types, undefined, 4));
 
 const goFile = generateUnrendered({crud, types, options});
+print(goFile);
 
-// print(goFile);
+const goSource = generate({crud, types, options});
+console.log(goSource);
+

@@ -302,6 +302,50 @@ func withTuples(sqlStatement string, sqlTuple string, numTuples int) string {
 }`
             }
         ]
+    },
+
+    // A `field_mask.FieldMask` is treated as if it were a slice of strings,
+    // but it's not a slice of strings. It's a `struct` containing a single
+    // field that is a slice of strings. `fieldMaskLen` and `appendField` are
+    // like `len` and `append`, respectively, but deal with `FieldMask`
+    // objects rather than with `[]string` directly.
+    fieldMaskLen: {
+        imports: {
+            "google.golang.org/genproto/protobuf/field_mask": null
+        },
+        declarations: [
+            {raw:
+`// fieldMaskLen returns the length of the slice of paths within the specified
+// field mask, or returns zero if the mask is nil.
+func fieldMaskLen(mask *field_mask.FieldMask) int {
+	if mask == nil {
+		return 0
+	}
+
+	return len(mask.Paths)
+}`
+            }
+        ]
+    },
+    appendField: {
+        imports: {
+            "google.golang.org/genproto/protobuf/field_mask": null
+        },
+        declarations: [
+            {raw:
+`// appendField adds the specified string to the end of the paths within the
+// specified field mask and returns the field mask. If the field mask is nil,
+// then a new field mask is first created.
+func appendField(mask *field_mask.FieldMask, fieldName string) *field_mask.FieldMask {
+	if mask == nil {
+		mask = &field_mask.FieldMask{}
+	}
+
+	mask.Paths = append(mask.Paths, fieldName)
+	return mask
+}`
+            }
+        ]
     }
 };
 

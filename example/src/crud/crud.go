@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"google.golang.org/genproto/googleapis/type/date"
+	"google.golang.org/genproto/protobuf/field_mask"
 	"strings"
 )
 
@@ -66,6 +67,17 @@ func CreateBoyScout(ctx context.Context, db *sql.DB, message pb.BoyScout) (err e
 			parameters = append(parameters, message.Id, element)
 		}
 		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_camping_trips`( `id`, `value`) values", "(?, ?)", len(message.CampingTrips)), parameters...)
+		if err != nil {
+			return
+		}
+	}
+
+	if fieldMaskLen(message.Mask) != 0 {
+		parameters = nil
+		for _, element := range message.Mask.Paths {
+			parameters = append(parameters, message.Id, element)
+		}
+		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_mask`( `id`, `value`) values", "(?, ?)", fieldMaskLen(message.Mask)), parameters...)
 		if err != nil {
 			return
 		}
@@ -161,6 +173,21 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, id string) (message *pb.BoySc
 			return
 		}
 		message.CampingTrips = append(message.CampingTrips, temp)
+	}
+
+	rows, err = transaction.QueryContext(ctx, "select `value` from `boy_scout_mask` where `id` = ?;", message.Id)
+	if err != nil {
+		return
+	}
+	ok = rows.Next()
+
+	for ; ok; ok = rows.Next() {
+		var temp string
+		err = rows.Scan(&temp)
+		if err != nil {
+			return
+		}
+		message.Mask = appendField(message.Mask, temp)
 	}
 
 	err = transaction.Commit()
@@ -262,6 +289,24 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message pb.BoyScout, fieldM
 		}
 	}
 
+	if included("mask") {
+		_, err = transaction.ExecContext(ctx, "delete from `boy_scout_mask` where `id` = ?;", message.Id)
+		if err != nil {
+			return
+		}
+	}
+
+	if included("mask") && fieldMaskLen(message.Mask) != 0 {
+		parameters = nil
+		for _, element := range message.Mask.Paths {
+			parameters = append(parameters, message.Id, element)
+		}
+		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_mask`( `id`, `value`) values", "(?, ?)", fieldMaskLen(message.Mask)), parameters...)
+		if err != nil {
+			return
+		}
+	}
+
 	err = transaction.Commit()
 	return
 }
@@ -297,6 +342,11 @@ func DeleteBoyScout(ctx context.Context, db *sql.DB, id string) (err error) {
 	}
 
 	_, err = transaction.ExecContext(ctx, "delete from `boy_scout_camping_trips` where `id` = ?;", message.Id)
+	if err != nil {
+		return
+	}
+
+	_, err = transaction.ExecContext(ctx, "delete from `boy_scout_mask` where `id` = ?;", message.Id)
 	if err != nil {
 		return
 	}
@@ -545,6 +595,16 @@ func withTuples(sqlStatement string, sqlTuple string, numTuples int) string {
 	return builder.String()
 }
 
+// fieldMaskLen returns the length of the slice of paths within the specified
+// field mask, or returns zero if the mask is nil.
+func fieldMaskLen(mask *field_mask.FieldMask) int {
+	if mask == nil {
+		return 0
+	}
+
+	return len(mask.Paths)
+}
+
 type dateScanner struct {
 	intermediary sql.NullString // YYYY-MM-DD
 	destination  **date.Date
@@ -618,4 +678,16 @@ func intoTimestamp(destination **timestamp.Timestamp) timestampScanner {
 	var scanner timestampScanner
 	scanner.destination = destination
 	return scanner
+}
+
+// appendField adds the specified string to the end of the paths within the
+// specified field mask and returns the field mask. If the field mask is nil,
+// then a new field mask is first created.
+func appendField(mask *field_mask.FieldMask, fieldName string) *field_mask.FieldMask {
+	if mask == nil {
+		mask = &field_mask.FieldMask{}
+	}
+
+	mask.Paths = append(mask.Paths, fieldName)
+	return mask
 }
