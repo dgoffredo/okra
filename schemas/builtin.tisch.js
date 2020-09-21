@@ -27,4 +27,12 @@ or('TYPE_DOUBLE',
    // Keep these "well-known" built-ins up to date with
    // `function builtinMessage`, defined in `proto2types.js`.
    '.google.protobuf.Timestamp',
-   '.google.type.Date')
+   '.google.type.Date',
+   // `FieldMask` is special because it's the only "builtin" type that behaves
+   // like an array. In proto, a `FieldMask` is a message that contains one
+   // field: `repeated string paths`. So, you could accomplish the same thing
+   // by just having a `repeated string whatever` instead of
+   // `google.protobuf.FieldMask whatever`. `FieldMask` is here treated
+   // specially in order to support convention and tooling that understands
+   // `google.protobuf.FieldMask`.
+   '.google.protobuf.FieldMask')
