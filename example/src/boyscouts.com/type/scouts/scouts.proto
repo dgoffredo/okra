@@ -5,6 +5,7 @@ package scouts;
 option go_package = "boyscouts.com/type/scouts;scouts";
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/field_mask.proto";
 import "google/type/date.proto";
 
 message BoyScout {
@@ -28,6 +29,9 @@ message BoyScout {
 
     // do we end up with an array of pointers?
     repeated google.type.Date camping_trips = 14;
+
+    // testing field masks
+    google.protobuf.FieldMask mask = 15;
 }
 
 message GirlScout {

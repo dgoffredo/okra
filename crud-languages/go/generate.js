@@ -44,6 +44,12 @@ define([
 // - `types`: an array of Okra types
 // - `options`: an object of proto file options (by file)
 function generate({crud, types, options}) {
+    return renderFile(generateUnrendered({crud, types, options}));
+}
+
+// See `generate` for documentation. This is the implementation except for the
+// rendering at the end (AST -> code).
+function generateUnrendered({crud, types, options}) {
     // Verify that the arguments have the expected shape.
     // - `crud`
     schemas.crud.enforce(crud);
@@ -113,7 +119,7 @@ This file is generated code. Please do not modify it by hand.`;
     // they aren't already.
     includeStandardImports(goFile);
 
-    return renderFile(goFile);
+    return goFile;
 }
 
 // CRUD Operations
@@ -867,7 +873,10 @@ function performReadArray({
     // For each row, we scan one array element into a temporary variable
     // `temp`. The expression that we pass to `rows.Scan` depends on the type
     // of the destination array. `intoTemp` is that expression.
-    const elementType = typeByField[instruction.destination.field].array;
+    // If the field is an array, then the element type is `.array`. Otherwise,
+    // it's a FieldMask as so the element type is string.
+    const fieldType = typeByField[instruction.destination.field];
+    const elementType = fieldType.array || {builtin: 'TYPE_STRING'};
     const intoTemp = (function () {
         // &temp
         const address = {address: {symbol: 'temp'}};
@@ -885,6 +894,11 @@ function performReadArray({
             return address;
         }
     }());
+
+    // If the destination is an array, then we append to it using the `append`
+    // function. If it's a FieldMask, then we append to it using `appendField`
+    // (which we defined).
+    const appendFunctionName = fieldType.array ? 'append' : 'appendField';
 
     // the array we're appending to
     const destinationGoArray = {
@@ -932,11 +946,13 @@ function performReadArray({
                 ifErrReturn,
 
                 // $destination = append($destination, temp)
+                // or
+                // $destination = appendField($destination, temp)
                 {assign: {
                     left: [destinationGoArray],
                     right: [{
                         call: {
-                            function: 'append',
+                            function: appendFunctionName,
                             arguments: [
                                 destinationGoArray,
                                 {symbol: 'temp'}
@@ -1047,7 +1063,8 @@ function performExecWithTuples({
     // function that returns an expression for whether a field is included in the CRUD operation
     included
 }) {
-    // Verify that exactly one of the `instruction.parameters` has array type.
+    // Verify that exactly one of the `instruction.parameters` has array or
+    // FieldMask type.
     // Also, verify that all of the `instruction.parameters` have the shape
     // `{field: ...}` (instead of `{included: ...}`).
     instruction.parameters.forEach(parameter => {
@@ -1059,29 +1076,42 @@ function performExecWithTuples({
         }
     });
 
-    const arrays = instruction.parameters.filter(
-        parameter => typeByField[parameter.field].array);
+    const arrayLikes = instruction.parameters.filter(parameter => {
+        const parameterType = typeByField[parameter.field];
+        return parameterType.array ||
+            parameterType.builtin === '.google.protobuf.FieldMask';
+    });
 
-    if (arrays.length !== 1) {
+    if (arrayLikes.length !== 1) {
         throw Error(`Expected "exec-with-tuples" parameters to contain ` +
-            `exactly one array-valued field, but found ${arrays.length}: ` +
-            JSON.stringify(arrays));
+            `exactly one array-valued or FieldMask field, but found ` + 
+            `${arrayLikes.length}: ` + JSON.stringify(arrayLikes));
     }
 
-    const [arrayField] = arrays.map(parameter => parameter.field);
+    const [arrayLikeField] = arrayLikes.map(parameter => parameter.field);
+    
+    // If the `arrayLikeField` is an array, then we can `range` loop over it
+    // normally, and we can get its length using `len`. If it's a FieldMask,
+    // though, then we need to `range` loop over its `.Paths` field, and we
+    // query its length using `fieldMaskLen` (which we defined).
+    const arrayLikeType = typeByField[arrayLikeField];
+    const lenFunctionName = arrayLikeType.array ? 'len' : 'fieldMaskLen';
+    const rangeArgumentParts = arrayLikeType.array
+        ? ['message', field2go(arrayLikeField)] // e.g. message.Pets
+        : ['message', field2go(arrayLikeField), 'Paths'] // e.g. messages.MustHaves.Paths
 
     // Here's what we're going for:
     //
-    //     if $included && len($array) != 0 {
+    //     if $included && $lenFunctionName($array) != 0 {
     //         parameters = nil // clear the slice
     //
-    //         for _, element := range message.$array {
+    //         for _, element := range $rangeArgument {
     //             parameters = append(parameters, [...], element, [...])
     //         }
     //
     //         _, err = transaction.ExecContext(
     //             ctx,
-    //             withTuples($sql, $tuple, len($array)),
+    //             withTuples($sql, $tuple, $lenFunctionName($array)),
     //             parameters...)
     //
     //         if err != nil {
@@ -1094,9 +1124,9 @@ function performExecWithTuples({
 
     const arrayLengthExpression = {
         call: {
-            function: 'len',
+            function: lenFunctionName,
             arguments: [
-                {dot: ['message', field2go(arrayField)]}
+                {dot: ['message', field2go(arrayLikeField)]}
             ]
         }
     };
@@ -1142,7 +1172,7 @@ function performExecWithTuples({
                 // }
                 {rangeFor: {
                     variables: ['_', 'element'],
-                    sequence: {dot: ['message', field2go(arrayField)]},
+                    sequence: {dot: rangeArgumentParts},
                     body: [
                         // parameters = append(parameters, [...], element, [...])
                         {assign: {
@@ -1154,12 +1184,12 @@ function performExecWithTuples({
                                     // The rest of the arguments to `append`
                                     // correspond to the
                                     // `instruction.parameters`. One of them
-                                    // will be `element` (the one array field),
-                                    // while the rest will be the other fields
-                                    // repeated again this time around the
-                                    // loop.
+                                    // will be `element` (the one
+                                    // array/FieldMask field), while the rest
+                                    // will be the other fields repeated again
+                                    // this time around the loop.
                                     ...instruction.parameters.map(parameter => {
-                                        if (parameter.field === arrayField) {
+                                        if (parameter.field === arrayLikeField) {
                                             return {symbol: 'element'};
                                         }
                                         else {
@@ -1606,6 +1636,7 @@ function type2go({
     // See `builtin.tisch.js`.
     return {
         '.google.protobuf.Timestamp': '*timestamp.Timestamp',
+        '.google.protobuf.FieldMask': '*field_mask.FieldMask',
         '.google.type.Date': '*date.Date',
         'TYPE_DOUBLE': 'float64',
         'TYPE_FLOAT': 'float32',
@@ -1894,6 +1925,9 @@ function walk(tree, visit) {
     recur(tree);
 }
 
-return {generate};
+return {
+    generate,
+    generateUnrendered // for testing
+};
 
 });

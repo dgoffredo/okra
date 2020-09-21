@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package sassafras.sassafras;
+
+import "google/protobuf/field_mask.proto";
+
+// A field of type FieldMask yields the corresponding "builtin" type.
+message UpdateItem {
+    fixed64 id = 1;
+    google.protobuf.FieldMask stuff = 2;
+}

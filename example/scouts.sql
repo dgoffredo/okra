@@ -60,6 +60,15 @@ engine = InnoDB
 character set utf8mb4
 comment = 'do we end up with an array of pointers?';
 
+create table `boy_scout_mask`(
+    `id` varchar(255) not null comment 'id of the relevant .scouts.BoyScout',
+    `value` longtext null comment 'one of the fields named by mask in some .scouts.BoyScout',
+    foreign key (`id`) references `boy_scout`(`id`),
+    index (`id`))
+engine = InnoDB
+character set utf8mb4
+comment = 'testing field masks';
+
 create table `girl_scout`(
     `id` varchar(255) not null comment 'RFC 4122 UUID',
     primary key (`id`))
