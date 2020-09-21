@@ -136,13 +136,18 @@ function instructionSelectArray({
     messageIdField,
     messageIdFieldType
 }) {
+    // If `arrayType` refers to an actual array, then the type of its elements
+    // is `arrayType.array`. However, if `arrayType` is a FieldMask, then
+    // the type of its elements is string.
+    const elementType = arrayType.array || {builtin: 'TYPE_STRING'};
+
     return {
         instruction: 'query',
 
         // It's important that we select only the `value` column, so that the
         // generated code then knows that the result set has only one column,
         // and to put its value into the array field.
-        sql: sqline(`select ${selector({columnName: 'value', fieldType: arrayType.array})}
+        sql: sqline(`select ${selector({columnName: 'value', fieldType: elementType})}
                 from ${quoteName(arrayTableName)}
                 where ${quoteName('id')} = ${parameter(messageIdFieldType)};`),
         parameters: [
@@ -269,7 +274,8 @@ function instructionUpdateMessage({type, legend}) {
 }
 
 // Deal the specified `fieldSources` array into two arrays: one for scalar
-// fields, and the other for array fields.
+// fields, and the other for array-like fields.
+// An array-like field is either an array or a FieldMask.
 function byMultiplicity(fieldSources) {
     // We can distinguish scalar fields (e.g. int32, string) from array fields
     // (e.g. repeated int32) by the presence of a "tableName" property in the
