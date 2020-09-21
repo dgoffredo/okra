@@ -44,6 +44,12 @@ define([
 // - `types`: an array of Okra types
 // - `options`: an object of proto file options (by file)
 function generate({crud, types, options}) {
+    return renderFile(generateUnrendered({crud, types, options}));
+}
+
+// See `generate` for documentation. This is the implementation except for the
+// rendering at the end (AST -> code).
+function generateUnrendered({crud, types, options}) {
     // Verify that the arguments have the expected shape.
     // - `crud`
     schemas.crud.enforce(crud);
@@ -113,7 +119,7 @@ This file is generated code. Please do not modify it by hand.`;
     // they aren't already.
     includeStandardImports(goFile);
 
-    return renderFile(goFile);
+    return goFile;
 }
 
 // CRUD Operations
@@ -1894,6 +1900,9 @@ function walk(tree, visit) {
     recur(tree);
 }
 
-return {generate};
+return {
+    generate,
+    generateUnrendered // for testing
+};
 
 });
