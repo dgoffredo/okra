@@ -62,8 +62,8 @@ const crud = types2crud(
 // console.error(JSON.stringify(types, undefined, 4));
 
 const goFile = generateUnrendered({crud, types, options});
-print(goFile);
+// print(goFile);
 
 const goSource = generate({crud, types, options});
-console.log(goSource);
+// console.log(goSource);
 
