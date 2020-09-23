@@ -2,7 +2,6 @@
 // for protobol buffer message types.
 //
 // This file is generated code. Please do not modify it by hand.
-
 package crud
 
 import (

@@ -349,7 +349,6 @@ function renderFile(goFile, lines) {
 
     if ('documentation' in goFile) {
         renderDocumentation(goFile.documentation, lines);
-        lines.push('');
     }
 
     // package foo
