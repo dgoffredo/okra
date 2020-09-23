@@ -3,22 +3,22 @@ start transaction;
 create table `rank`(
     `id` int not null,
     `name` varchar(255) not null,
-    `description` longtext null,
+    `description` varchar(4096) null,
     primary key (`id`))
 engine = InnoDB
 character set utf8mb4;
 
 create table `boy_scout`(
     `id` varchar(255) not null comment 'RFC 4122 UUID',
-    `full_name` longtext null comment 'e.g. Samayamantri Venkata Rama Naga Butchi Anjaneya Satya Krishna Vijay',
-    `short_name` longtext null comment 'e.g. Alice',
+    `full_name` varchar(4096) null comment 'e.g. Samayamantri Venkata Rama Naga Butchi Anjaneya Satya Krishna Vijay',
+    `short_name` varchar(4096) null comment 'e.g. Alice',
     `birthdate` date null,
     `join_time` timestamp(6) null,
-    `country_code` longtext null comment 'ISO 3166-1 alpha-3 upper-case',
-    `language_code` longtext null comment 'ISO 639-1 two-character lower-case',
+    `country_code` varchar(4096) null comment 'ISO 3166-1 alpha-3 upper-case',
+    `language_code` varchar(4096) null comment 'ISO 639-1 two-character lower-case',
     `pack_code` int unsigned null comment 'as administered by the Head Wolf',
     `rank` int null,
-    `iana_country_code` longtext null comment 'playing with naming conventions',
+    `iana_country_code` varchar(4096) null comment 'playing with naming conventions',
     `what_about_this` bigint null,
     primary key (`id`),
     foreign key (`rank`) references `rank`(`id`))
@@ -28,7 +28,7 @@ character set utf8mb4;
 create table `badge`(
     `id` int not null,
     `name` varchar(255) not null,
-    `description` longtext null,
+    `description` varchar(4096) null,
     primary key (`id`))
 engine = InnoDB
 character set utf8mb4;
@@ -44,7 +44,7 @@ character set utf8mb4;
 
 create table `boy_scout_favorite_songs`(
     `id` varchar(255) not null comment 'id of the relevant .scouts.BoyScout',
-    `value` longtext null comment 'one of the favorite_songs in some .scouts.BoyScout',
+    `value` varchar(4096) null comment 'one of the favorite_songs in some .scouts.BoyScout',
     foreign key (`id`) references `boy_scout`(`id`),
     index (`id`))
 engine = InnoDB
@@ -62,7 +62,7 @@ comment = 'do we end up with an array of pointers?';
 
 create table `boy_scout_mask`(
     `id` varchar(255) not null comment 'id of the relevant .scouts.BoyScout',
-    `value` longtext null comment 'one of the fields named by mask in some .scouts.BoyScout',
+    `value` varchar(255) null comment 'one of the fields named by mask in some .scouts.BoyScout',
     foreign key (`id`) references `boy_scout`(`id`),
     index (`id`))
 engine = InnoDB
