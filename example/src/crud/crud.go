@@ -119,7 +119,7 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, id string) (message *pb.BoySc
 	ok = rows.Next()
 
 	if !ok {
-		err = fmt.Errorf("Unable to read row from database. There is no row.")
+		err = noRow()
 		return
 	}
 
@@ -417,7 +417,7 @@ func ReadGirlScout(ctx context.Context, db *sql.DB, id string) (message *pb.Girl
 	ok = rows.Next()
 
 	if !ok {
-		err = fmt.Errorf("Unable to read row from database. There is no row.")
+		err = noRow()
 		return
 	}
 
@@ -602,6 +602,19 @@ func fieldMaskLen(mask *field_mask.FieldMask) int {
 	}
 
 	return len(mask.Paths)
+}
+
+// NoRow is the error that occurs when a row is expected from SQL but none is
+// available. This is "not found" for "read" operations.
+type NoRow struct{}
+
+// Error returns the error message associated with the NoRow error.
+func (NoRow) Error() string {
+	return "Unable to read row from database. There is no row."
+}
+
+func noRow() NoRow {
+	return NoRow{}
 }
 
 type dateScanner struct {

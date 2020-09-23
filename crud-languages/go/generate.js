@@ -740,7 +740,7 @@ function performReadRow({
     // Here's what we're going for:
     //
     //     if !ok {
-    //         err = fmt.Errorf("Unable to read row from database. There is no row.")
+    //         err = nowRow()
     //         return
     //     }
     //     
@@ -783,7 +783,7 @@ function performReadRow({
 
     return [
         // if !ok {
-        //     err = fmt.Errorf("Unable to read row from database. There is no row.")
+        //     err = noRow()
         //     return
         // }
         {if: {
@@ -792,12 +792,7 @@ function performReadRow({
                 {assign: {
                     left: ['err'],
                     right: [{
-                        call: {
-                            function: {dot: ['fmt', 'Errorf']},
-                            arguments: [
-                                "Unable to read row from database. There is no row."
-                            ]
-                        }
+                        call: {function: 'noRow', arguments: []}
                     }]
                 }},
                 {return: []}
