@@ -358,22 +358,17 @@ func appendField(mask *field_mask.FieldMask, fieldName string) *field_mask.Field
             {raw: 
 `// NoRow is the error that occurs when a row is expected from SQL but none is
 // available. This is "not found" for "read" operations.
-type NoRow struct{}`
+type NoRow string`
             },
             {raw:
 `// Error returns the error message associated with the NoRow error.
-func (NoRow) Error() string {
-	return "Unable to read row from database. There is no row."
+func (err NoRow) Error() string {
+	return string(err)
 }`
             },
-            // It's silly to have a function that just returns `NoRow{}`, but we
-            // currently identify prerendered code snippets my the mentioning
-            // of certain functions (in this case, `noRow`). Rather than extend
-            // that idenfication to consider struct literals, we define this
-            // redundant function.
             {raw:
-`func noRow() NoRow {
-	return NoRow{}
+`func noRow(why string) NoRow {
+	return NoRow(why)
 }`
             }
         ]

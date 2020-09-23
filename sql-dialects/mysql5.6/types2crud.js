@@ -269,7 +269,12 @@ function instructionUpdateMessage({type, legend}) {
             // The last parameter is the primary key of the message, for the
             // `where` clause in the `update` statement.
             {field: type.idFieldName}
-        ]
+        ],
+        // If not exactly one row is affected by this update, then it follows
+        // that no rows were affected (since the `where` clause is on the
+        // primary key). In that case, we want the update to fail with
+        // "not found." `requireRowsAffected = 1` assures this.
+        requireRowsAffected: 1
     };
 }
 
