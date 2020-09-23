@@ -86,11 +86,11 @@ func CreateBoyScout(ctx context.Context, db *sql.DB, message pb.BoyScout) (err e
 	return
 }
 
-// ReadBoyScout reads the message having the specified id from the specified
-// db, subject to the specified cancellation context ctx. On success, the
-// error returned will be nil and the pb.BoyScout will not be nil. On
-// error, the error returned will not be nil.
-func ReadBoyScout(ctx context.Context, db *sql.DB, id string) (message *pb.BoyScout, err error) {
+// ReadBoyScout reads from the specified db into the specified message, where
+// the ID of the message must be pre-populated by the caller. On success, the
+// error returned will be nil. On error, the error returned will not be nil.
+// The specified cancellation context ctx is forwarded wherever appropriate.
+func ReadBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err error) {
 	var transaction *sql.Tx
 	defer func() {
 		if err != nil && transaction != nil {
@@ -105,8 +105,6 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, id string) (message *pb.BoySc
 	}()
 	var ok bool
 
-	message = &pb.BoyScout{}
-	message.Id = id
 	transaction, err = db.BeginTx(ctx, nil)
 	if err != nil {
 		return
@@ -384,11 +382,11 @@ func CreateGirlScout(ctx context.Context, db *sql.DB, message pb.GirlScout) (err
 	return
 }
 
-// ReadGirlScout reads the message having the specified id from the specified
-// db, subject to the specified cancellation context ctx. On success, the
-// error returned will be nil and the pb.GirlScout will not be nil. On
-// error, the error returned will not be nil.
-func ReadGirlScout(ctx context.Context, db *sql.DB, id string) (message *pb.GirlScout, err error) {
+// ReadGirlScout reads from the specified db into the specified message, where
+// the ID of the message must be pre-populated by the caller. On success, the
+// error returned will be nil. On error, the error returned will not be nil.
+// The specified cancellation context ctx is forwarded wherever appropriate.
+func ReadGirlScout(ctx context.Context, db *sql.DB, message *pb.GirlScout) (err error) {
 	var transaction *sql.Tx
 	defer func() {
 		if err != nil && transaction != nil {
@@ -403,8 +401,6 @@ func ReadGirlScout(ctx context.Context, db *sql.DB, id string) (message *pb.Girl
 	}()
 	var ok bool
 
-	message = &pb.GirlScout{}
-	message.Id = id
 	transaction, err = db.BeginTx(ctx, nil)
 	if err != nil {
 		return

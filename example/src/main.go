@@ -50,9 +50,8 @@ func main() {
 	fmt.Println(err)
 
 	for i := 0; i < 3; i++ {
-		tedAgain, err := crud.ReadBoyScout(ctx, db, ted.Id)
-		// tedAgain, err := crud.ReadBoyScout(ctx, db, "nonsense")
-		fmt.Println(tedAgain)
+		err := crud.ReadBoyScout(ctx, db, &ted)
+		fmt.Println(ted)
 		fmt.Println(err)
 	}
 
@@ -61,7 +60,7 @@ func main() {
 	// ted.FullName = "King of the Fishes"
 	var moreTed pb.BoyScout
 	moreTed.Id = ted.Id
-	moreTed.FullName = "Teddicus Piscerius" 
+	moreTed.FullName = "Teddicus Piscerius"
 	// err = crud.UpdateBoyScout(ctx, db, moreTed, []string{"full_name", "favorite_songs"})
 	err = crud.UpdateBoyScout(ctx, db, moreTed, nil)
 	fmt.Println(err)

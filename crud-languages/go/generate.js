@@ -224,11 +224,8 @@ function funcRead({typeName, instructions, types, typePackageAlias}) {
     // Here's what we're going for:
     //
     //      // ... documentation ...
-    //      func ReadFooBar(ctx context.Context, db *sql.DB, id int64) (message *pb.FooBar, err error) {
+    //      func ReadFooBar(ctx context.Context, db *sql.DB, message *pb.FooBar) (err error) {
     //         ... vars ...
-    //
-    //         message = &pb.FooBar{}
-    //         message.Id = id
     //
     //         transaction, err = db.BeginTx(ctx, nil)
     //         if err != nil {
@@ -251,26 +248,18 @@ function funcRead({typeName, instructions, types, typePackageAlias}) {
         {});
 
     const documentation =
-`${funcName} reads the message having the specified id from the specified
-db, subject to the specified cancellation context ctx. On success, the
-error returned will be nil and the ${messageType} will not be nil. On
-error, the error returned will not be nil.`;
+`${funcName} reads from the specified db into the specified message, where
+the ID of the message must be pre-populated by the caller. On success, the
+error returned will be nil. On error, the error returned will not be nil.
+The specified cancellation context ctx is forwarded wherever appropriate.`;
 
     const parameters = [
         {name: 'ctx', type: 'context.Context'},
         {name: 'db', type: '*sql.DB'},
-        // `id` has whatever Go type corresponds to the designated ID field of
-        // the message type.
-        {name: 'id',
-         type: type2go({
-            okraType: typeByField[types[typeName].idFieldName],
-            typePackageAlias
-        })}
+        // `message` is a pointer to a protobuf message (of the correct type)
+        {name: 'message', type: `*${messageType}`}
     ];
     const results = [
-        // `message` is a pointer to a protobuf message (of the correct type)
-        {name: 'message',
-         type: `*${messageType}`},
         {name: 'err', type: 'error'}
     ];
     const variables = [];
@@ -302,31 +291,9 @@ error, the error returned will not be nil.`;
     // `transaction` is a variable assumed to be in scope, so add that first.
     variable({name: 'transaction', goType: '*sql.Tx'});
 
-
     // Begin by assigning a default value to `message` (the return
     // value). Then start a transaction.
     statements.push(
-        // message = &pb.FooBar{}
-        {assign: {
-            left: ['message'],
-            right: [{
-                address: {
-                    sequenceLiteral: {
-                        type: messageType,
-                        elements: []
-                    }
-                }
-            }]
-        }},
-
-        // message.Id = id
-        {assign: {
-            left: [{
-                dot: ['message', field2go(types[typeName].idFieldName)]
-            }],
-            right: [{symbol: 'id'}]
-        }},
-
         // transaction, err = db.BeginTx(ctx, nil)
         // if err != nil {
         //     return
