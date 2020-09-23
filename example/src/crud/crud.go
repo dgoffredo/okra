@@ -19,7 +19,7 @@ import (
 // CreateBoyScout adds the specified message to the specified db, subject to the
 // specified cancellation context ctx. Return nil on success, or return a
 // non-nil value if an error occurs.
-func CreateBoyScout(ctx context.Context, db *sql.DB, message pb.BoyScout) (err error) {
+func CreateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err error) {
 	var transaction *sql.Tx
 	defer func() {
 		if err != nil && transaction != nil {
@@ -197,7 +197,7 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err er
 // name of a field in message whose value is to be used in the database
 // update. If fieldMask is empty or nil, then update all fields from
 // message. Return nil on success, or a non-nil error if an error occurs.
-func UpdateBoyScout(ctx context.Context, db *sql.DB, message pb.BoyScout, fieldMask []string) (err error) {
+func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, fieldMask []string) (err error) {
 	var transaction *sql.Tx
 	defer func() {
 		if err != nil && transaction != nil {
@@ -360,7 +360,7 @@ func DeleteBoyScout(ctx context.Context, db *sql.DB, id string) (err error) {
 // CreateGirlScout adds the specified message to the specified db, subject to the
 // specified cancellation context ctx. Return nil on success, or return a
 // non-nil value if an error occurs.
-func CreateGirlScout(ctx context.Context, db *sql.DB, message pb.GirlScout) (err error) {
+func CreateGirlScout(ctx context.Context, db *sql.DB, message *pb.GirlScout) (err error) {
 	var transaction *sql.Tx
 	defer func() {
 		if err != nil && transaction != nil {
@@ -433,7 +433,7 @@ func ReadGirlScout(ctx context.Context, db *sql.DB, message *pb.GirlScout) (err 
 // name of a field in message whose value is to be used in the database
 // update. If fieldMask is empty or nil, then update all fields from
 // message. Return nil on success, or a non-nil error if an error occurs.
-func UpdateGirlScout(ctx context.Context, db *sql.DB, message pb.GirlScout, fieldMask []string) (err error) {
+func UpdateGirlScout(ctx context.Context, db *sql.DB, message *pb.GirlScout, fieldMask []string) (err error) {
 	var transaction *sql.Tx
 	defer func() {
 		if err != nil && transaction != nil {

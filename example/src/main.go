@@ -46,7 +46,7 @@ func main() {
 
 	db := dbConn()
 	ctx := context.TODO()
-	err := crud.CreateBoyScout(ctx, db, ted)
+	err := crud.CreateBoyScout(ctx, db, &ted)
 	fmt.Println(err)
 
 	for i := 0; i < 3; i++ {
@@ -62,7 +62,7 @@ func main() {
 	moreTed.Id = ted.Id
 	moreTed.FullName = "Teddicus Piscerius"
 	// err = crud.UpdateBoyScout(ctx, db, moreTed, []string{"full_name", "favorite_songs"})
-	err = crud.UpdateBoyScout(ctx, db, moreTed, nil)
+	err = crud.UpdateBoyScout(ctx, db, &moreTed, nil)
 	fmt.Println(err)
 
 	err = crud.DeleteBoyScout(ctx, db, moreTed.Id)

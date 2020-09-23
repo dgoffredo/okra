@@ -138,7 +138,7 @@ function funcCreate({typeName, instructions, types, typePackageAlias}) {
     // Here's what we're going for:
     //
     //     ... documentation ...
-    //     func CreateFooBar(ctx context.Context, db *sql.DB, message pb.FooBar) (err error) {
+    //     func CreateFooBar(ctx context.Context, db *sql.DB, message *pb.FooBar) (err error) {
     //         ... vars ...
     //
     //         transaction, err = db.BeginTx(ctx, nil)
@@ -161,7 +161,7 @@ non-nil value if an error occurs.`;
         {name: 'ctx', type: 'context.Context'},
         {name: 'db', type: '*sql.DB'},
         {name: 'message',
-         type: `${typePackageAlias(typeName)}.${messageOrEnum2go(typeName)}`}
+         type: `*${typePackageAlias(typeName)}.${messageOrEnum2go(typeName)}`}
     ];
     const results = [{name: 'err', type: 'error'}];
     const variables = [];
@@ -374,7 +374,7 @@ message. Return nil on success, or a non-nil error if an error occurs.`;
     const parameters = [
         {name: 'ctx', type: 'context.Context'},
         {name: 'db', type: '*sql.DB'},
-        {name: 'message', type: messageType},
+        {name: 'message', type: `*${messageType}`},
         {name: 'fieldMask', type: '[]string'}
     ];
     const results = [
