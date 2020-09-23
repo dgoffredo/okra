@@ -243,7 +243,7 @@ function type2sql(type) {
         'TYPE_INT32': 'int',
         'TYPE_UINT32': 'int unsigned',
         'TYPE_BOOL': 'bool',
-        'TYPE_STRING': 'varchar(4096)', // compromise (DBA didn't like `longtext`)
+        'TYPE_STRING': 'varchar(1024)', // compromise (DBA didn't like `longtext`)
         'TYPE_BYTES': 'longblob',
         '.google.protobuf.Timestamp': 'timestamp(6)',
         '.google.type.Date': 'date',
