@@ -66,6 +66,12 @@
     ],
     update: [
       {
+        instruction: 'query',
+        sql: 'select null from `update_item` where `id` = ?;',
+        parameters: [{field: 'id'}]
+      },
+      { instruction: 'read-row', destinations: [ 'ignore' ] },
+      {
         instruction: "exec",
         sql: "update `update_item` set where `id` = ?;",
         parameters: [

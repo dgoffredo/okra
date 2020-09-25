@@ -65,6 +65,12 @@
         ],
         update: [
             {
+                instruction: 'query',
+                sql: 'select null from `grill` where `id` = ?;',
+                parameters: [{field: "id"}]
+            },
+            { instruction: 'read-row', destinations: [ 'ignore' ] },
+            {
                 instruction: "exec",
                 sql: "update `grill` set where `id` = ?;",
                 parameters: [

@@ -363,7 +363,7 @@ type NoRow struct{}`
             {raw:
 `// Error returns the error message associated with the NoRow error.
 func (NoRow) Error() string {
-	return "Unable to read row from database. There is no row."
+	return "There is no corresponding row in the database."
 }`
             },
             // It's silly to have a function that just returns `NoRow{}`, but we
@@ -374,6 +374,23 @@ func (NoRow) Error() string {
             {raw:
 `func noRow() NoRow {
 	return NoRow{}
+}`
+            }
+        ]
+    },
+    // `ignore()` is used to ignore results from SQL. In particular, it's used
+    // as part of the "are there any rows to update?" check done at the
+    // beginning of "update" CRUD operations.
+    ignore: {
+        imports: {},
+        declarations: [
+            {raw:
+`// ignore returns an output parameter for use in sql.Rows.Scan. The returned
+// value accepts any SQL value and does nothing with it.
+func ignore() interface{} {
+	var dummy interface{}
+	var pointer interface{} = &dummy
+	return pointer
 }`
             }
         ]

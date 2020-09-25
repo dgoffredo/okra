@@ -718,6 +718,10 @@ function performReadRow({
     //     rows.Next()
     //
     const destinations = instruction.destinations.map(destination => {
+        if (destination === 'ignore') {
+            return {call: {function: 'ignore', arguments: []}};
+        }
+
         const type = typeByField[destination.field]; // okra type
         const member = field2go(destination.field); // Go struct field name
         if (type.builtin === '.google.protobuf.Timestamp') {

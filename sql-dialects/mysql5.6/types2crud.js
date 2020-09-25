@@ -208,6 +208,41 @@ function instructionSelectMessage({type, legend}) {
     };
 }
 
+// Return an array of CRUD instructions that check whether there is a
+// particular instance of the specified `type` in the database, and produces
+// an error (by failing to read a result row) if there isn't. This mechanism
+// is used by updates to verify that there is anything to update.
+function instructionsMessageExists({type, legend}) {
+    const keyColumnName = legend.fieldSources
+        .find(({fieldName}) => fieldName === type.idFieldName)
+        .columnName;
+    const fieldTypes = Object.fromEntries(
+        type.fields.map(({name, type}) => [name, type]));
+    const idFieldType = fieldTypes[type.idFieldName];
+
+    return [
+        // Select something (null) for each matching row. The idea is that if
+        // there are no matching rows, then the following read-row will fail.
+        // There's guaranteed to be no more than one row, because we're
+        // querying on a primary key column.
+        {
+            instruction: 'query',
+            sql: sqline(`select null
+                from ${quoteName(legend.tableName)}
+                where ${quoteName(keyColumnName)} = ${parameter(idFieldType)};`),
+            parameters: [
+                {field: type.idFieldName}
+            ]
+        },
+        // This read-row will succeed if the above query produced any rows.
+        // It will fail if there are no rows. Ignore the column value.
+        {
+            instruction: 'read-row',
+            destinations: ['ignore']
+        }
+    ];
+}
+
 // Return a snippet of SQL that sets the value at the specified `columnName`
 // to either a parameterized value or to itself (a no-op) depending on a
 // parameterized boolean. The boolean says whether to update the column. The
@@ -408,6 +443,9 @@ function instructionsUpdateMessage({type, legend}) {
         type.fields.map(({name, type}) => [name, type]));
 
     return [
+        // Check that there is a matching message to be updated.
+        ...instructionsMessageExists({type, legend}),
+
         // Update the message table.
         // `instructionUpdateMessage` will return `undefined` if no instruction is
         // needed, so we "filter out" that case here.

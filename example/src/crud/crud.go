@@ -117,7 +117,7 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err er
 	ok = rows.Next()
 
 	if !ok {
-		err = noRow("no row to select")
+		err = noRow()
 		return
 	}
 
@@ -204,8 +204,13 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 			err = combineErrors(err, transaction.Rollback())
 		}
 	}()
-	var execResult sql.Result
-	var rowsAffected int64
+	var rows *sql.Rows
+	defer func() {
+		if rows != nil {
+			rows.Close()
+		}
+	}()
+	var ok bool
 	var parameters []interface{}
 	var fieldMaskMap map[string]bool
 	var included func(string) bool
@@ -229,16 +234,25 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 		return
 	}
 
-	execResult, err = transaction.ExecContext(ctx, "update `boy_scout` set `full_name` = case when ? then ? else `full_name` end, `short_name` = case when ? then ? else `short_name` end, `birthdate` = case when ? then ? else `birthdate` end, `join_time` = case when ? then from_unixtime(cast(? / 1000000.0 as decimal(20, 6))) else `join_time` end, `country_code` = case when ? then ? else `country_code` end, `language_code` = case when ? then ? else `language_code` end, `pack_code` = case when ? then ? else `pack_code` end, `rank` = case when ? then ? else `rank` end, `iana_country_code` = case when ? then ? else `iana_country_code` end, `what_about_this` = case when ? then ? else `what_about_this` end where `id` = ?;", included("full_name"), message.FullName, included("short_name"), message.ShortName, included("birthdate"), fromDate(message.Birthdate), included("join_time"), fromTimestamp(message.JoinTime), included("country_code"), message.CountryCode, included("language_code"), message.LanguageCode, included("pack_code"), message.PackCode, included("rank"), message.Rank, included("IANA_country_code"), message.IANACountryCode, included("whatAboutThis"), message.WhatAboutThis, message.Id)
+	rows, err = transaction.QueryContext(ctx, "select null from `boy_scout` where `id` = ?;", message.Id)
 	if err != nil {
 		return
 	}
-	rowsAffected, err = execResult.RowsAffected()
+	ok = rows.Next()
+
+	if !ok {
+		err = noRow()
+		return
+	}
+
+	err = rows.Scan(ignore())
 	if err != nil {
 		return
 	}
-	if rowsAffected != 1 {
-		err = noRow("no row to update")
+	rows.Next()
+
+	_, err = transaction.ExecContext(ctx, "update `boy_scout` set `full_name` = case when ? then ? else `full_name` end, `short_name` = case when ? then ? else `short_name` end, `birthdate` = case when ? then ? else `birthdate` end, `join_time` = case when ? then from_unixtime(cast(? / 1000000.0 as decimal(20, 6))) else `join_time` end, `country_code` = case when ? then ? else `country_code` end, `language_code` = case when ? then ? else `language_code` end, `pack_code` = case when ? then ? else `pack_code` end, `rank` = case when ? then ? else `rank` end, `iana_country_code` = case when ? then ? else `iana_country_code` end, `what_about_this` = case when ? then ? else `what_about_this` end where `id` = ?;", included("full_name"), message.FullName, included("short_name"), message.ShortName, included("birthdate"), fromDate(message.Birthdate), included("join_time"), fromTimestamp(message.JoinTime), included("country_code"), message.CountryCode, included("language_code"), message.LanguageCode, included("pack_code"), message.PackCode, included("rank"), message.Rank, included("IANA_country_code"), message.IANACountryCode, included("whatAboutThis"), message.WhatAboutThis, message.Id)
+	if err != nil {
 		return
 	}
 
@@ -423,7 +437,7 @@ func ReadGirlScout(ctx context.Context, db *sql.DB, message *pb.GirlScout) (err 
 	ok = rows.Next()
 
 	if !ok {
-		err = noRow("no row to select")
+		err = noRow()
 		return
 	}
 
@@ -450,24 +464,38 @@ func UpdateGirlScout(ctx context.Context, db *sql.DB, message *pb.GirlScout, fie
 			err = combineErrors(err, transaction.Rollback())
 		}
 	}()
-	var execResult sql.Result
-	var rowsAffected int64
+	var rows *sql.Rows
+	defer func() {
+		if rows != nil {
+			rows.Close()
+		}
+	}()
+	var ok bool
 
 	transaction, err = db.BeginTx(ctx, nil)
 	if err != nil {
 		return
 	}
 
-	execResult, err = transaction.ExecContext(ctx, "update `girl_scout` set where `id` = ?;", message.Id)
+	rows, err = transaction.QueryContext(ctx, "select null from `girl_scout` where `id` = ?;", message.Id)
 	if err != nil {
 		return
 	}
-	rowsAffected, err = execResult.RowsAffected()
+	ok = rows.Next()
+
+	if !ok {
+		err = noRow()
+		return
+	}
+
+	err = rows.Scan(ignore())
 	if err != nil {
 		return
 	}
-	if rowsAffected != 1 {
-		err = noRow("no row to update")
+	rows.Next()
+
+	_, err = transaction.ExecContext(ctx, "update `girl_scout` set where `id` = ?;", message.Id)
+	if err != nil {
 		return
 	}
 
@@ -622,15 +650,15 @@ func fieldMaskLen(mask *field_mask.FieldMask) int {
 
 // NoRow is the error that occurs when a row is expected from SQL but none is
 // available. This is "not found" for "read" operations.
-type NoRow string
+type NoRow struct{}
 
 // Error returns the error message associated with the NoRow error.
-func (err NoRow) Error() string {
-	return string(err)
+func (NoRow) Error() string {
+	return "There is no corresponding row in the database."
 }
 
-func noRow(why string) NoRow {
-	return NoRow(why)
+func noRow() NoRow {
+	return NoRow{}
 }
 
 type dateScanner struct {
@@ -718,4 +746,12 @@ func appendField(mask *field_mask.FieldMask, fieldName string) *field_mask.Field
 
 	mask.Paths = append(mask.Paths, fieldName)
 	return mask
+}
+
+// ignore returns an output parameter for use in sql.Rows.Scan. The returned
+// value accepts any SQL value and does nothing with it.
+func ignore() interface{} {
+	var dummy interface{}
+	var pointer interface{} = &dummy
+	return pointer
 }
