@@ -750,7 +750,7 @@ function performReadRow({
 
     return [
         // if !ok {
-        //     err = noRow("no row to select")
+        //     err = noRow()
         //     return
         // }
         {if: {
@@ -759,7 +759,7 @@ function performReadRow({
                 {assign: {
                     left: ['err'],
                     right: [{
-                        call: {function: 'noRow', arguments: ["no row to select"]}
+                        call: {function: 'noRow', arguments: []}
                     }]
                 }},
                 {return: []}
@@ -940,7 +940,8 @@ function performExec({
     // Note that that variables that are _assumed_ to be in scope, such as
     // `ctx` and `transaction`, don't need to use this function. It's for
     // variables like `rows` and `ok`.
-    variable,
+    // variable,
+    // NOTE: This instruction doesn't use any non-implicit variables.
 
     // function that returns an expression for whether a field is included in the CRUD operation
     included
@@ -951,8 +952,7 @@ function performExec({
     //        'instruction': 'exec',
     //        'condition?': {'included': String},
     //        'sql': String,
-    //        'parameters': [inputParameter, ...etc],
-    //        'requireRowsAffected?': Number
+    //        'parameters': [inputParameter, ...etc]
     //    }
     
     // Here's what we're going for
@@ -962,25 +962,7 @@ function performExec({
     //         return
     //     }
     //
-    // or, if there's a "condition," additionally wrap the while thing in an
-    // `if` statement.
-    //
-    // Also, if `instruction.requireRowsAffected` has a value, then we have to
-    // inspect the result of the exec to see row many rows were affected. In
-    // that case, it instead looks like this:
-    //
-    //     execResult, err = transaction.ExecContext(ctx, $query, $parameters ...)
-    //     if err != nil {
-    //         return
-    //     }
-    //     rowsAffected, err = execResult.RowsAffected()
-    //     if err != nil {
-    //         return
-    //     }
-    //     if rowsAffected != $requireRowsAffected {
-    //         err = noRow("no row to update")
-    //         return
-    //     }
+    // or, if there's a "condition," wrap the above in an `if` statement.
 
     const parameters = inputParameters2expressions({
         parameters: instruction.parameters,
@@ -988,22 +970,11 @@ function performExec({
         included
     });
 
-    // If `requireRowsAffected` was specified, then we need to declare a
-    // variable to capture the result of the exec, and then examine it
-    // afterward. If `requireRowsAffected` was not specified, then we can
-    // ignore the result using the "_" placeholder.
-    let execResultVarName = '_';
-    if ('requireRowsAffected' in instruction) {
-        variable({name: 'execResult', goType: 'sql.Result'});
-        variable({name: 'rowsAffected', goType: 'int64'});
-        execResultVarName = 'execResult';
-    }
-
-    // If there's a condition, we'll wrap all of this in an `if` later.
+    // If there's a condition, we'll wrap all of this in an `if`.
     const statements = [
-        // $execResultVarName, err = transaction.ExecContext(ctx, $sql, $parameters ...)
+        // _, err = transaction.ExecContext(ctx, $sql, $parameters ...)
         {assign: {
-            left: [execResultVarName, 'err'],
+            left: ['_', 'err'],
             right: [{
                 call: {
                     function: {dot: ['transaction', 'ExecContext']},
@@ -1022,53 +993,6 @@ function performExec({
         ifErrReturn
     ];
 
-    // There's more to do if we need to check the number of rows affected.
-    if ('requireRowsAffected' in instruction) {
-        statements.push(
-            // rowsAffected, err = execResult.RowsAffected()
-            {assign: {
-                left: ['rowsAffected', 'err'],
-                right: [{
-                    call: {
-                        function: {dot: [execResultVarName, 'RowsAffected']},
-                        arguments: []
-                    }
-                }]
-            }},
-
-            // if err != nil {
-            //     return
-            // }
-            ifErrReturn,
-
-            // if rowsAffected != $requireRowsAffected {
-            //     err = noRow("no row to update")
-            //     return
-            // }
-            {if: {
-                condition: {notEqual: {
-                    left: {symbol: 'rowsAffected'},
-                    right: instruction.requireRowsAffected
-                }},
-                body: [
-                    {assign: {
-                        left: ['err'],
-                        right: [{call: {
-                            function: 'noRow',
-                            // Strictly speaking, this "exec" might not be an
-                            // "update" statement. But, I happen to know that
-                            // it will be, so it's simpler to hard-code the
-                            // fact here in this error message.
-                            arguments: ['no row to update']}}]}},
-
-                    {return: []}
-                ]}}
-        );
-    }
-
-    // The `statements` constructed above might not get executed if there is a
-    // "condition" for the instruction. If there's a condition, wrap it all in a
-    // branch.
     if ('condition' in instruction) {
         return [{
             if: {

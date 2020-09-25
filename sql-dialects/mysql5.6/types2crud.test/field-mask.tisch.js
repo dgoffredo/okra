@@ -72,8 +72,7 @@
           {
             field: "id"
           }
-        ],
-        requireRowsAffected: 1
+        ]
       },
       {
         instruction: "exec",

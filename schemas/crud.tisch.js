@@ -57,8 +57,10 @@
         {'included': String}
     );
 
-    // Field name of the destination field.
-    const outputParameter = {'field': String};
+    // The field name of the destination field, or just ignore it.
+    // Ignoring an output parameter can be useful when the point of the query
+    // is just to see whether there is a row in the result set.
+    const outputParameter = or({'field': String}, 'ignore');
 
     const instruction = or(
         // Read-only SQL query.
@@ -95,17 +97,7 @@
             // executed.
             'condition?': {'included': String},
             'sql': String,
-            'parameters': [inputParameter, ...etc],
-            // An "update" to the table of a message ought to fail with some
-            // sort of "not found" error when there are no rows to update. For
-            // such `exec` cases, the generator will produce
-            // `requireRowsAffected = 1` to indicate that it is an error
-            // unless exactly one row is affected by this `exec`. If
-            // `requireRowsAffected` is omitted, then there is no such
-            // requirement. In general, `requireRowsAffected` specifies the
-            // exact number of rows that must be affected by this `exec` in
-            // order for it to be considered successful.
-            'requireRowsAffected?': Number
+            'parameters': [inputParameter, ...etc]
         },
     
         // Read/write SQL query. Not expected to produce any rows.
