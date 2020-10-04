@@ -33,7 +33,7 @@ func CreateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err 
 		return
 	}
 
-	_, err = transaction.ExecContext(ctx, "insert into `boy_scout`( `id`, `full_name`, `short_name`, `birthdate`, `join_time`, `country_code`, `language_code`, `pack_code`, `rank`, `iana_country_code`, `what_about_this`) values (?, ?, ?, ?, from_unixtime(cast(? / 1000000.0 as decimal(20, 6))), ?, ?, ?, ?, ?, ?);", message.Id, message.FullName, message.ShortName, fromDate(message.Birthdate), fromTimestamp(message.JoinTime), message.CountryCode, message.LanguageCode, message.PackCode, message.Rank, message.IANACountryCode, message.WhatAboutThis)
+	_, err = transaction.ExecContext(ctx, "insert into `boy_scout`( `id`, `full_name`, `short_name`, `birthdate`, `join_time`, `country_code`, `language_code`, `pack_code`, `rank`, `iana_country_code`, `what_about_this`) values (?, ?, ?, ?, from_unixtime(cast(? / 1000000.0 as decimal(20, 6))), ?, ?, ?, ?, ?, ?);", fromString(message.Id), fromString(message.FullName), fromString(message.ShortName), fromDate(message.Birthdate), fromTimestamp(message.JoinTime), fromString(message.CountryCode), fromString(message.LanguageCode), fromUint32(message.PackCode), fromInt32(int32(message.Rank)), fromString(message.IANACountryCode), fromInt64(message.WhatAboutThis))
 	if err != nil {
 		return
 	}
@@ -41,7 +41,7 @@ func CreateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err 
 	if len(message.Badges) != 0 {
 		parameters = nil
 		for _, element := range message.Badges {
-			parameters = append(parameters, message.Id, element)
+			parameters = append(parameters, fromString(message.Id), element)
 		}
 		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_badges`( `id`, `value`) values", "(?, ?)", len(message.Badges)), parameters...)
 		if err != nil {
@@ -52,7 +52,7 @@ func CreateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err 
 	if len(message.FavoriteSongs) != 0 {
 		parameters = nil
 		for _, element := range message.FavoriteSongs {
-			parameters = append(parameters, message.Id, element)
+			parameters = append(parameters, fromString(message.Id), element)
 		}
 		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_favorite_songs`( `id`, `value`) values", "(?, ?)", len(message.FavoriteSongs)), parameters...)
 		if err != nil {
@@ -63,7 +63,7 @@ func CreateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err 
 	if len(message.CampingTrips) != 0 {
 		parameters = nil
 		for _, element := range message.CampingTrips {
-			parameters = append(parameters, message.Id, element)
+			parameters = append(parameters, fromString(message.Id), element)
 		}
 		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_camping_trips`( `id`, `value`) values", "(?, ?)", len(message.CampingTrips)), parameters...)
 		if err != nil {
@@ -74,7 +74,7 @@ func CreateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err 
 	if fieldMaskLen(message.Mask) != 0 {
 		parameters = nil
 		for _, element := range message.Mask.Paths {
-			parameters = append(parameters, message.Id, element)
+			parameters = append(parameters, fromString(message.Id), element)
 		}
 		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_mask`( `id`, `value`) values", "(?, ?)", fieldMaskLen(message.Mask)), parameters...)
 		if err != nil {
@@ -110,7 +110,7 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err er
 		return
 	}
 
-	rows, err = transaction.QueryContext(ctx, "select `id`, `full_name`, `short_name`, `birthdate`, floor(unix_timestamp(`join_time`) * 1000000), `country_code`, `language_code`, `pack_code`, `rank`, `iana_country_code`, `what_about_this` from `boy_scout` where `id` = ?;", message.Id)
+	rows, err = transaction.QueryContext(ctx, "select `id`, `full_name`, `short_name`, `birthdate`, floor(unix_timestamp(`join_time`) * 1000000), `country_code`, `language_code`, `pack_code`, `rank`, `iana_country_code`, `what_about_this` from `boy_scout` where `id` = ?;", fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -121,13 +121,13 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err er
 		return
 	}
 
-	err = rows.Scan(&message.Id, &message.FullName, &message.ShortName, intoDate(&message.Birthdate), intoTimestamp(&message.JoinTime), &message.CountryCode, &message.LanguageCode, &message.PackCode, &message.Rank, &message.IANACountryCode, &message.WhatAboutThis)
+	err = rows.Scan(intoString(&message.Id), intoString(&message.FullName), intoString(&message.ShortName), intoDate(&message.Birthdate), intoTimestamp(&message.JoinTime), intoString(&message.CountryCode), intoString(&message.LanguageCode), intoUint32(&message.PackCode), intoEnum(func(value int32) { message.Rank = pb.Rank(value) }), intoString(&message.IANACountryCode), intoInt64(&message.WhatAboutThis))
 	if err != nil {
 		return
 	}
 	rows.Next()
 
-	rows, err = transaction.QueryContext(ctx, "select `value` from `boy_scout_badges` where `id` = ?;", message.Id)
+	rows, err = transaction.QueryContext(ctx, "select `value` from `boy_scout_badges` where `id` = ?;", fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -135,14 +135,14 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err er
 
 	for ; ok; ok = rows.Next() {
 		var temp pb.Badge
-		err = rows.Scan(&temp)
+		err = rows.Scan(intoEnum(func(value int32) { temp = pb.Badge(value) }))
 		if err != nil {
 			return
 		}
 		message.Badges = append(message.Badges, temp)
 	}
 
-	rows, err = transaction.QueryContext(ctx, "select `value` from `boy_scout_favorite_songs` where `id` = ?;", message.Id)
+	rows, err = transaction.QueryContext(ctx, "select `value` from `boy_scout_favorite_songs` where `id` = ?;", fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -150,14 +150,14 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err er
 
 	for ; ok; ok = rows.Next() {
 		var temp string
-		err = rows.Scan(&temp)
+		err = rows.Scan(intoString(&temp))
 		if err != nil {
 			return
 		}
 		message.FavoriteSongs = append(message.FavoriteSongs, temp)
 	}
 
-	rows, err = transaction.QueryContext(ctx, "select `value` from `boy_scout_camping_trips` where `id` = ?;", message.Id)
+	rows, err = transaction.QueryContext(ctx, "select `value` from `boy_scout_camping_trips` where `id` = ?;", fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -172,7 +172,7 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err er
 		message.CampingTrips = append(message.CampingTrips, temp)
 	}
 
-	rows, err = transaction.QueryContext(ctx, "select `value` from `boy_scout_mask` where `id` = ?;", message.Id)
+	rows, err = transaction.QueryContext(ctx, "select `value` from `boy_scout_mask` where `id` = ?;", fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -180,7 +180,7 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err er
 
 	for ; ok; ok = rows.Next() {
 		var temp string
-		err = rows.Scan(&temp)
+		err = rows.Scan(intoString(&temp))
 		if err != nil {
 			return
 		}
@@ -234,7 +234,7 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 		return
 	}
 
-	rows, err = transaction.QueryContext(ctx, "select null from `boy_scout` where `id` = ?;", message.Id)
+	rows, err = transaction.QueryContext(ctx, "select null from `boy_scout` where `id` = ?;", fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -251,13 +251,13 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 	}
 	rows.Next()
 
-	_, err = transaction.ExecContext(ctx, "update `boy_scout` set `full_name` = case when ? then ? else `full_name` end, `short_name` = case when ? then ? else `short_name` end, `birthdate` = case when ? then ? else `birthdate` end, `join_time` = case when ? then from_unixtime(cast(? / 1000000.0 as decimal(20, 6))) else `join_time` end, `country_code` = case when ? then ? else `country_code` end, `language_code` = case when ? then ? else `language_code` end, `pack_code` = case when ? then ? else `pack_code` end, `rank` = case when ? then ? else `rank` end, `iana_country_code` = case when ? then ? else `iana_country_code` end, `what_about_this` = case when ? then ? else `what_about_this` end where `id` = ?;", included("full_name"), message.FullName, included("short_name"), message.ShortName, included("birthdate"), fromDate(message.Birthdate), included("join_time"), fromTimestamp(message.JoinTime), included("country_code"), message.CountryCode, included("language_code"), message.LanguageCode, included("pack_code"), message.PackCode, included("rank"), message.Rank, included("IANA_country_code"), message.IANACountryCode, included("whatAboutThis"), message.WhatAboutThis, message.Id)
+	_, err = transaction.ExecContext(ctx, "update `boy_scout` set `full_name` = case when ? then ? else `full_name` end, `short_name` = case when ? then ? else `short_name` end, `birthdate` = case when ? then ? else `birthdate` end, `join_time` = case when ? then from_unixtime(cast(? / 1000000.0 as decimal(20, 6))) else `join_time` end, `country_code` = case when ? then ? else `country_code` end, `language_code` = case when ? then ? else `language_code` end, `pack_code` = case when ? then ? else `pack_code` end, `rank` = case when ? then ? else `rank` end, `iana_country_code` = case when ? then ? else `iana_country_code` end, `what_about_this` = case when ? then ? else `what_about_this` end where `id` = ?;", included("full_name"), fromString(message.FullName), included("short_name"), fromString(message.ShortName), included("birthdate"), fromDate(message.Birthdate), included("join_time"), fromTimestamp(message.JoinTime), included("country_code"), fromString(message.CountryCode), included("language_code"), fromString(message.LanguageCode), included("pack_code"), fromUint32(message.PackCode), included("rank"), fromInt32(int32(message.Rank)), included("IANA_country_code"), fromString(message.IANACountryCode), included("whatAboutThis"), fromInt64(message.WhatAboutThis), fromString(message.Id))
 	if err != nil {
 		return
 	}
 
 	if included("badges") {
-		_, err = transaction.ExecContext(ctx, "delete from `boy_scout_badges` where `id` = ?;", message.Id)
+		_, err = transaction.ExecContext(ctx, "delete from `boy_scout_badges` where `id` = ?;", fromString(message.Id))
 		if err != nil {
 			return
 		}
@@ -266,7 +266,7 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 	if included("badges") && len(message.Badges) != 0 {
 		parameters = nil
 		for _, element := range message.Badges {
-			parameters = append(parameters, message.Id, element)
+			parameters = append(parameters, fromString(message.Id), element)
 		}
 		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_badges`( `id`, `value`) values", "(?, ?)", len(message.Badges)), parameters...)
 		if err != nil {
@@ -275,7 +275,7 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 	}
 
 	if included("favorite_songs") {
-		_, err = transaction.ExecContext(ctx, "delete from `boy_scout_favorite_songs` where `id` = ?;", message.Id)
+		_, err = transaction.ExecContext(ctx, "delete from `boy_scout_favorite_songs` where `id` = ?;", fromString(message.Id))
 		if err != nil {
 			return
 		}
@@ -284,7 +284,7 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 	if included("favorite_songs") && len(message.FavoriteSongs) != 0 {
 		parameters = nil
 		for _, element := range message.FavoriteSongs {
-			parameters = append(parameters, message.Id, element)
+			parameters = append(parameters, fromString(message.Id), element)
 		}
 		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_favorite_songs`( `id`, `value`) values", "(?, ?)", len(message.FavoriteSongs)), parameters...)
 		if err != nil {
@@ -293,7 +293,7 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 	}
 
 	if included("camping_trips") {
-		_, err = transaction.ExecContext(ctx, "delete from `boy_scout_camping_trips` where `id` = ?;", message.Id)
+		_, err = transaction.ExecContext(ctx, "delete from `boy_scout_camping_trips` where `id` = ?;", fromString(message.Id))
 		if err != nil {
 			return
 		}
@@ -302,7 +302,7 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 	if included("camping_trips") && len(message.CampingTrips) != 0 {
 		parameters = nil
 		for _, element := range message.CampingTrips {
-			parameters = append(parameters, message.Id, element)
+			parameters = append(parameters, fromString(message.Id), element)
 		}
 		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_camping_trips`( `id`, `value`) values", "(?, ?)", len(message.CampingTrips)), parameters...)
 		if err != nil {
@@ -311,7 +311,7 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 	}
 
 	if included("mask") {
-		_, err = transaction.ExecContext(ctx, "delete from `boy_scout_mask` where `id` = ?;", message.Id)
+		_, err = transaction.ExecContext(ctx, "delete from `boy_scout_mask` where `id` = ?;", fromString(message.Id))
 		if err != nil {
 			return
 		}
@@ -320,7 +320,7 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 	if included("mask") && fieldMaskLen(message.Mask) != 0 {
 		parameters = nil
 		for _, element := range message.Mask.Paths {
-			parameters = append(parameters, message.Id, element)
+			parameters = append(parameters, fromString(message.Id), element)
 		}
 		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_mask`( `id`, `value`) values", "(?, ?)", fieldMaskLen(message.Mask)), parameters...)
 		if err != nil {
@@ -352,27 +352,27 @@ func DeleteBoyScout(ctx context.Context, db *sql.DB, id string) (err error) {
 		return
 	}
 
-	_, err = transaction.ExecContext(ctx, "delete from `boy_scout_badges` where `id` = ?;", message.Id)
+	_, err = transaction.ExecContext(ctx, "delete from `boy_scout_badges` where `id` = ?;", fromString(message.Id))
 	if err != nil {
 		return
 	}
 
-	_, err = transaction.ExecContext(ctx, "delete from `boy_scout_favorite_songs` where `id` = ?;", message.Id)
+	_, err = transaction.ExecContext(ctx, "delete from `boy_scout_favorite_songs` where `id` = ?;", fromString(message.Id))
 	if err != nil {
 		return
 	}
 
-	_, err = transaction.ExecContext(ctx, "delete from `boy_scout_camping_trips` where `id` = ?;", message.Id)
+	_, err = transaction.ExecContext(ctx, "delete from `boy_scout_camping_trips` where `id` = ?;", fromString(message.Id))
 	if err != nil {
 		return
 	}
 
-	_, err = transaction.ExecContext(ctx, "delete from `boy_scout_mask` where `id` = ?;", message.Id)
+	_, err = transaction.ExecContext(ctx, "delete from `boy_scout_mask` where `id` = ?;", fromString(message.Id))
 	if err != nil {
 		return
 	}
 
-	_, err = transaction.ExecContext(ctx, "delete from `boy_scout` where `id` = ?;", message.Id)
+	_, err = transaction.ExecContext(ctx, "delete from `boy_scout` where `id` = ?;", fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -397,7 +397,7 @@ func CreateGirlScout(ctx context.Context, db *sql.DB, message *pb.GirlScout) (er
 		return
 	}
 
-	_, err = transaction.ExecContext(ctx, "insert into `girl_scout`( `id`) values (?);", message.Id)
+	_, err = transaction.ExecContext(ctx, "insert into `girl_scout`( `id`) values (?);", fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -430,7 +430,7 @@ func ReadGirlScout(ctx context.Context, db *sql.DB, message *pb.GirlScout) (err 
 		return
 	}
 
-	rows, err = transaction.QueryContext(ctx, "select `id` from `girl_scout` where `id` = ?;", message.Id)
+	rows, err = transaction.QueryContext(ctx, "select `id` from `girl_scout` where `id` = ?;", fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -441,7 +441,7 @@ func ReadGirlScout(ctx context.Context, db *sql.DB, message *pb.GirlScout) (err 
 		return
 	}
 
-	err = rows.Scan(&message.Id)
+	err = rows.Scan(intoString(&message.Id))
 	if err != nil {
 		return
 	}
@@ -477,7 +477,7 @@ func UpdateGirlScout(ctx context.Context, db *sql.DB, message *pb.GirlScout, fie
 		return
 	}
 
-	rows, err = transaction.QueryContext(ctx, "select null from `girl_scout` where `id` = ?;", message.Id)
+	rows, err = transaction.QueryContext(ctx, "select null from `girl_scout` where `id` = ?;", fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -494,7 +494,7 @@ func UpdateGirlScout(ctx context.Context, db *sql.DB, message *pb.GirlScout, fie
 	}
 	rows.Next()
 
-	_, err = transaction.ExecContext(ctx, "update `girl_scout` set where `id` = ?;", message.Id)
+	_, err = transaction.ExecContext(ctx, "update `girl_scout` set where `id` = ?;", fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -523,7 +523,7 @@ func DeleteGirlScout(ctx context.Context, db *sql.DB, id string) (err error) {
 		return
 	}
 
-	_, err = transaction.ExecContext(ctx, "delete from `girl_scout` where `id` = ?;", message.Id)
+	_, err = transaction.ExecContext(ctx, "delete from `girl_scout` where `id` = ?;", fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -563,6 +563,24 @@ func combineErrors(errs ...error) CompositeError {
 	return CompositeError(filtered)
 }
 
+// stringValuer is a driver.Valuer that produces string
+type stringValuer struct {
+	source string
+}
+
+func (valuer stringValuer) Value() (driver.Value, error) {
+	if valuer.source == "" {
+		return nil, nil
+	}
+
+	return string(valuer.source), nil
+}
+
+// fromString is a constructor for stringValuer.
+func fromString(source string) stringValuer {
+	return stringValuer{source: source}
+}
+
 // dateValuer is a driver.Valuer that produces a string representation of a
 // date.Date.
 type dateValuer struct {
@@ -579,10 +597,9 @@ func (valuer dateValuer) Value() (driver.Value, error) {
 	return driver.Value(dateString), nil
 }
 
-// fromDate is a constructor for dateValuer. It's redundant but I like the
-// naming convention.
+// fromDate is a constructor for dateValuer.
 func fromDate(source *date.Date) dateValuer {
-	return dateValuer{source}
+	return dateValuer{source: source}
 }
 
 // timestampValuer is a driver.Valuer that produces a numeric representation of a
@@ -602,10 +619,63 @@ func (valuer timestampValuer) Value() (driver.Value, error) {
 	return driver.Value(microsecondsSinceEpoch), nil
 }
 
-// fromTimstamp is a constructor for timestampValuer. It's redundant but I like
-// the naming convention.
+// fromTimstamp is a constructor for timestampValuer.
 func fromTimestamp(source *timestamp.Timestamp) timestampValuer {
-	return timestampValuer{source}
+	return timestampValuer{source: source}
+}
+
+// uint32Valuer is a driver.Valuer that produces uint32
+type uint32Valuer struct {
+	source uint32
+}
+
+func (valuer uint32Valuer) Value() (driver.Value, error) {
+	if valuer.source == 0 {
+		return nil, nil
+	}
+
+	return int64(valuer.source), nil
+}
+
+// fromUint32 is a constructor for uint32Valuer.
+func fromUint32(source uint32) uint32Valuer {
+	return uint32Valuer{source: source}
+}
+
+// int32Valuer is a driver.Valuer that produces int32
+type int32Valuer struct {
+	source int32
+}
+
+func (valuer int32Valuer) Value() (driver.Value, error) {
+	if valuer.source == 0 {
+		return nil, nil
+	}
+
+	return int64(valuer.source), nil
+}
+
+// fromInt32 is a constructor for int32Valuer.
+func fromInt32(source int32) int32Valuer {
+	return int32Valuer{source: source}
+}
+
+// int64Valuer is a driver.Valuer that produces int64
+type int64Valuer struct {
+	source int64
+}
+
+func (valuer int64Valuer) Value() (driver.Value, error) {
+	if valuer.source == 0 {
+		return nil, nil
+	}
+
+	return int64(valuer.source), nil
+}
+
+// fromInt64 is a constructor for int64Valuer.
+func fromInt64(source int64) int64Valuer {
+	return int64Valuer{source: source}
 }
 
 // withTuples returns a string consisting of the specified sqlStatement
@@ -661,9 +731,34 @@ func noRow() NoRow {
 	return NoRow{}
 }
 
+type stringScanner struct {
+	destination  *string
+	intermediary sql.NullString
+}
+
+func (scanner stringScanner) Scan(value interface{}) error {
+	err := scanner.intermediary.Scan(value)
+	if err != nil {
+		return err
+	}
+
+	if scanner.intermediary.Valid {
+		*scanner.destination = string(scanner.intermediary.String)
+	} else {
+		*scanner.destination = ""
+	}
+
+	return nil
+}
+
+// intoString is a constructor for stringScanner.
+func intoString(destination *string) stringScanner {
+	return stringScanner{destination: destination}
+}
+
 type dateScanner struct {
-	intermediary sql.NullString // YYYY-MM-DD
 	destination  **date.Date
+	intermediary sql.NullString // YYYY-MM-DD
 }
 
 func (scanner dateScanner) Scan(value interface{}) error {
@@ -696,17 +791,14 @@ func (scanner dateScanner) Scan(value interface{}) error {
 	return nil
 }
 
-// intoDate is a constructor for dateScanner. It is convenient to use directly
-// as an argument to sql.Row.Scan.
+// intoDate is a constructor for dateScanner.
 func intoDate(destination **date.Date) dateScanner {
-	var scanner dateScanner
-	scanner.destination = destination
-	return scanner
+	return dateScanner{destination: destination}
 }
 
 type timestampScanner struct {
-	intermediary sql.NullInt64 // microseconds since unix epoch
 	destination  **timestamp.Timestamp
+	intermediary sql.NullInt64 // microseconds since unix epoch
 }
 
 func (scanner timestampScanner) Scan(value interface{}) error {
@@ -728,12 +820,85 @@ func (scanner timestampScanner) Scan(value interface{}) error {
 	return nil
 }
 
-// intoTimestamp is a constructor for timestampScanner. It is convenient to use
-// directly as an argument to sql.Row.Scan.
+// intoTimestamp is a constructor for timestampScanner.
 func intoTimestamp(destination **timestamp.Timestamp) timestampScanner {
-	var scanner timestampScanner
-	scanner.destination = destination
-	return scanner
+	return timestampScanner{destination: destination}
+}
+
+type uint32Scanner struct {
+	destination  *uint32
+	intermediary sql.NullInt64
+}
+
+func (scanner uint32Scanner) Scan(value interface{}) error {
+	err := scanner.intermediary.Scan(value)
+	if err != nil {
+		return err
+	}
+
+	if scanner.intermediary.Valid {
+		*scanner.destination = uint32(scanner.intermediary.Int64)
+	} else {
+		*scanner.destination = 0
+	}
+
+	return nil
+}
+
+// intoUint32 is a constructor for uint32Scanner.
+func intoUint32(destination *uint32) uint32Scanner {
+	return uint32Scanner{destination: destination}
+}
+
+type enumScanner struct {
+	// flush assigns the specified int32 to the destination enum field.
+	// The idea is that enumScanner doesn't know about the underlying
+	// enum type. That information is encapsulated within flush.
+	flush        func(int32)
+	intermediary sql.NullInt64
+}
+
+func (scanner enumScanner) Scan(value interface{}) error {
+	if err := scanner.intermediary.Scan(value); err != nil {
+		return err
+	}
+
+	var intValue int32
+	if scanner.intermediary.Valid {
+		intValue = int32(scanner.intermediary.Int64)
+	}
+	scanner.flush(intValue)
+	return nil
+}
+
+// intoEnum is a constructor for enumScanner.
+func intoEnum(flush func(int32)) enumScanner {
+	return enumScanner{flush: flush}
+}
+
+type int64Scanner struct {
+	destination  *int64
+	intermediary sql.NullInt64
+}
+
+func (scanner int64Scanner) Scan(value interface{}) error {
+	err := scanner.intermediary.Scan(value)
+	if err != nil {
+		return err
+	}
+
+	if scanner.intermediary.Valid {
+		*scanner.destination = int64(scanner.intermediary.Int64)
+	} else {
+		*scanner.destination = 0
+	}
+
+	return nil
+}
+
+// intoInt64 is a constructor for int64Scanner.
+func intoInt64(destination *int64) int64Scanner {
+	return int64Scanner{destination: destination}
 }
 
 // appendField adds the specified string to the end of the paths within the

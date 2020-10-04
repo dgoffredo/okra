@@ -113,6 +113,15 @@ function stringifyExpression(expression) {
         }
         return `${object}[${stringifyExpression(index)}]`;
     }
+    else if (expression.unaryOneLineCallback) {
+        // func($arg) { $body }
+        const {argument, body} = expression.unaryOneLineCallback;
+        const type = typeof argument.type === 'string'
+            ? argument.type
+            : stringifyExpression(argument.type);
+        const bodyString = stringifyStatement(body);
+        return `func(${argument.name} ${type}) { ${bodyString} }`;
+    }
     else {
         throw Error(`Invalid AST expression: ${JSON.stringify(expression)}`);
     }
@@ -161,7 +170,7 @@ function stringifyAssign({left: leftVars, right: rightExprs}) {
             return lvalue;
         }
         else {
-            // It's a {dot: ...} or a {index: ...}
+            // It's a {dot: ...} or a {index: ...} or a {symbol: ...}
             return stringifyExpression(lvalue);
         }
     }).join(', ');
@@ -248,7 +257,10 @@ function renderAssignFunc({left, parameters, results, body}, lines) {
 }
 
 function renderStatement(statement, lines) {
-    if (statement.assign) {
+    if (!isObject(statement)) {
+        lines.push(stringifyExpression(statement));
+    }
+    else if (statement.assign) {
         lines.push(stringifyAssign(statement.assign));
     }
     else if (statement.assignFunc) {

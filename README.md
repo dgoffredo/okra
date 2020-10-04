@@ -21,6 +21,8 @@ mostly-flat protobuf messages into mostly-flat SQL tables. The two cool
 things that it supports are enum types and arrays of basic types or of enum
 types.
 
+TODO: describe the mapping from proto schema to database schema.
+
 How
 ---
 ![](images/dataflow.svg)

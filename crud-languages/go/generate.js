@@ -696,6 +696,9 @@ function performReadRow({
     // and which output parameters go to an effective /dev/null (excluded
     // ones). However, I don't currently have a need for this. `include` would
     // be defined as "always true." So, I instead omit it for now.
+
+    // function that maps message/enum type name to a Go package alias
+    typePackageAlias
 }) {
     // Reminder of the shape of a "read-row" instruction:
     //
@@ -722,30 +725,14 @@ function performReadRow({
             return {call: {function: 'ignore', arguments: []}};
         }
 
-        const type = typeByField[destination.field]; // okra type
+        const okraType = typeByField[destination.field];
         const member = field2go(destination.field); // Go struct field name
-        if (type.builtin === '.google.protobuf.Timestamp') {
-            return {
-                // intoTimestamp(&message.someField)
-                call: {
-                    function: 'intoTimestamp',
-                    arguments: [{address: {dot: ['message', member]}}]
-                }
-            };
-        }
-        else if (type.builtin === '.google.type.Date') {
-            return {
-                // intoDate(&message.someField)
-                call: {
-                    function: 'intoDate',
-                    arguments: [{address: {dot: ['message', member]}}]
-                }
-            };
-        }
-        else {
-            // &message.someField
-            return {address: {dot: ['message', member]}};
-        }
+        const target = {dot: ['message', member]};
+        return fieldDestinationExpression({
+            okraType,
+            target,
+            typePackageAlias
+        });
     });
 
     // The following code references these variables.
@@ -843,23 +830,11 @@ function performReadArray({
     // it's a FieldMask as so the element type is string.
     const fieldType = typeByField[instruction.destination.field];
     const elementType = fieldType.array || {builtin: 'TYPE_STRING'};
-    const intoTemp = (function () {
-        // &temp
-        const address = {address: {symbol: 'temp'}};
-
-        if (elementType.builtin === '.google.protobuf.Timestamp') {
-            // intoTimestamp(&temp)
-            return {call: {function: 'intoTimestamp', arguments: [address]}};
-        }
-        else if (elementType.builtin === '.google.type.Date') {
-            // intoDate(&temp)
-            return {call: {function: 'intoDate', arguments: [address]}};
-        }
-        else {
-            // &temp
-            return address;
-        }
-    }());
+    const intoTemp = fieldDestinationExpression({
+        okraType: elementType,
+        target: {symbol: 'temp'},
+        typePackageAlias
+    });
 
     // If the destination is an array, then we append to it using the `append`
     // function. If it's a FieldMask, then we append to it using `appendField`
@@ -895,7 +870,7 @@ function performReadArray({
                     type: type2go({okraType: elementType, typePackageAlias})
                 }},
                 
-                // err = rows.Scan(&temp) // might use intoDate or intoTimestamp
+                // err = rows.Scan($intoTemp)
                 {assign: {
                     left: ['err'],
                     right: [{
@@ -1314,6 +1289,59 @@ function includeStandardImports(goFile) {
 // =========
 // This section contains everything else. It's a mix of functions and constants
 // used throughout the other sections.
+
+// Return an AST expression that can be used as an argument to Rows.Scan to
+// scan into the specified `target` of the specified `okra` type. Use the
+// specified `typePackageAlias` to resolve package names for enum types.
+function fieldDestinationExpression({
+    // the okra type of the destination field, e.g. {builtin: 'TYPE_DOUBLE'}
+    okraType,
+
+    // AST expression of the target value, e.g. {dot: ['message', 'birthdate']}
+    target,
+
+    // function that maps message/enum type name to a Go package alias
+    typePackageAlias
+}) {
+    if (okraType.enum) {
+        const enumType = type2go({okraType, typePackageAlias})
+        return {
+            // intoEnum(func(value int32) { $target = $enumType(value) })
+            call: {
+                function: 'intoEnum',
+                arguments: [{
+                    unaryOneLineCallback: {
+                        argument: {name: 'value', type: 'int32'},
+                        body: {
+                            assign: {
+                                left: [target],
+                                right: [{
+                                    call: {
+                                        function: enumType,
+                                        arguments: [{symbol: 'value'}]}}]}}}}]}};
+    }
+
+    const functionName = ({
+        // okra type -> name of function that scans into variables of that type
+        '.google.protobuf.Timestamp': 'intoTimestamp',
+        '.google.type.Date': 'intoDate',
+        'TYPE_DOUBLE': 'intoFloat64',
+        'TYPE_FLOAT': 'intoFloat32',
+        'TYPE_INT64': 'intoInt64',
+        'TYPE_UINT64': 'intoUint64',
+        'TYPE_INT32': 'intoInt32',
+        'TYPE_UINT32': 'intoUint32',
+        'TYPE_BOOL': 'intoBool',
+        'TYPE_STRING': 'intoString',
+        'TYPE_BYTES': 'intoBytes'
+    }[okraType.builtin]);
+
+    return {
+        // $functionName(&$target)
+        call: {
+            function: functionName,
+            arguments: [{address: target}]}};
+}
 
 function deepCopy(from) {
     // JSON-compatible data only. What do you want?
@@ -1736,28 +1764,49 @@ function inputParameter2expression({parameter, typeByField, included}) {
     if (parameter.field) {
         const type = typeByField[parameter.field]; // okra type
         const member = field2go(parameter.field); // Go struct field name
-        if (type.builtin === '.google.protobuf.Timestamp') {
+
+        if (type.enum) {
+            // Enums are special in that they must first be cast to int32 for
+            // generic use.
             return {
-                // fromTimestamp(message.someField)
+                // fromInt32(int32(message.$member))
                 call: {
-                    function: 'fromTimestamp',
-                    arguments: [{dot: ['message', member]}]
+                    function: 'fromInt32',
+                    arguments: [{
+                        call: {
+                            function: 'int32', // not a function, but same syntax
+                            arguments: [{dot: ['message', member]}]
+                        }
+                    }]
                 }
             };
         }
-        else if (type.builtin === '.google.type.Date') {
-            return {
-                // fromDate(message.someField)
-                call: {
-                    function: 'fromDate',
-                    arguments: [{dot: ['message', member]}]
-                }
-            };
-        }
-        else {
-            // message.someField
-            return {dot: ['message', member]};
-        }
+
+        // If it's not an enum, then it's builtin, and we just call the
+        // appropriate "from___" function, e.g. "fromString".
+        const functionName = ({
+            // okra type -> name of function that returns a Valuer for
+            // variables of that type
+            '.google.protobuf.Timestamp': 'fromTimestamp',
+            '.google.type.Date': 'fromDate',
+            'TYPE_DOUBLE': 'fromFloat64',
+            'TYPE_FLOAT': 'fromFloat32',
+            'TYPE_INT64': 'fromInt64',
+            'TYPE_UINT64': 'fromUint64',
+            'TYPE_INT32': 'fromInt32',
+            'TYPE_UINT32': 'fromUint32',
+            'TYPE_BOOL': 'fromBool',
+            'TYPE_STRING': 'fromString',
+            'TYPE_BYTES': 'fromBytes'
+        }[type.builtin]);
+
+        return {
+            // $functionName(message.$member)
+            call: {
+                function: functionName,
+                arguments: [{dot: ['message', member]}]
+            }
+        };
     }
     else {
         // Instead of referencing a field value, we're asking whether the

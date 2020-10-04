@@ -45,8 +45,8 @@ const prerenderedDeclarations = {
         declarations: [
             {raw:
 `type timestampScanner struct {
-	intermediary sql.NullInt64 // microseconds since unix epoch
 	destination  **timestamp.Timestamp
+	intermediary sql.NullInt64 // microseconds since unix epoch
 }`
             },
             {raw:
@@ -70,12 +70,9 @@ const prerenderedDeclarations = {
 }`
             },
             {raw:
-`// intoTimestamp is a constructor for timestampScanner. It is convenient to use
-// directly as an argument to sql.Row.Scan.
+`// intoTimestamp is a constructor for timestampScanner.
 func intoTimestamp(destination **timestamp.Timestamp) timestampScanner {
-	var scanner timestampScanner
-	scanner.destination = destination
-	return scanner
+    return timestampScanner{destination: destination}
 }`
             }
         ]
@@ -94,8 +91,8 @@ func intoTimestamp(destination **timestamp.Timestamp) timestampScanner {
         declarations: [
             {raw:
 `type dateScanner struct {
-	intermediary sql.NullString // YYYY-MM-DD
 	destination  **date.Date
+	intermediary sql.NullString // YYYY-MM-DD
 }`
             },
             {raw:
@@ -130,12 +127,9 @@ func intoTimestamp(destination **timestamp.Timestamp) timestampScanner {
 }`
             },
             {raw:
-`// intoDate is a constructor for dateScanner. It is convenient to use directly
-// as an argument to sql.Row.Scan.
+`// intoDate is a constructor for dateScanner.
 func intoDate(destination **date.Date) dateScanner {
-	var scanner dateScanner
-	scanner.destination = destination
-	return scanner
+    return dateScanner{destination: destination}
 }`
             }
         ]
@@ -171,10 +165,9 @@ type timestampValuer struct {
 }`
             },
             {raw:
-`// fromTimstamp is a constructor for timestampValuer. It's redundant but I like
-// the naming convention.
+`// fromTimstamp is a constructor for timestampValuer.
 func fromTimestamp(source *timestamp.Timestamp) timestampValuer {
-	return timestampValuer{source}
+	return timestampValuer{source: source}
 }`
             }
         ]
@@ -210,10 +203,9 @@ type dateValuer struct {
 }`
             },
             {raw:
-`// fromDate is a constructor for dateValuer. It's redundant but I like the
-// naming convention.
+`// fromDate is a constructor for dateValuer.
 func fromDate(source *date.Date) dateValuer {
-	return dateValuer{source}
+	return dateValuer{source: source}
 }`
             }
         ]
@@ -394,8 +386,285 @@ func ignore() interface{} {
 }`
             }
         ]
+    },
+    // `intoUint64` has a special implementation, because there is no
+    // sql.NullUint64. You can pass a **uint64 to Rows.Scan, but then you need
+    // code after Scan returns to inspect the resulting *uint64. Instead, here
+    // I define a Scanner that scans into a sql.NullString and then parses a
+    // uint64 from the string. I don't know if this is portable. It works for
+    // the MySQL driver that currently interests me.
+    intoUint64: {
+        imports: {
+            "database/sql": null,
+            "strconv": null
+        },
+        declarations: [
+            {raw:
+`type uint64Scanner struct {
+	destination  *uint64
+	intermediary sql.NullString
+}`
+            },
+            {raw:
+`func (scanner uint64Scanner) Scan(value interface{}) error {
+	if err := scanner.intermediary.Scan(value); err != nil {
+		return err
+	}
+
+	if !scanner.intermediary.Valid {
+		// !Valid -> null -> zero
+		*scanner.destination = 0
+		return nil
+	}
+
+	// parse a base-10 64-bit unsigned integer
+	parsedValue, err := strconv.ParseUint(scanner.intermediary.String, 10, 64)
+	if err != nil {
+		return err
+	}
+
+	*scanner.destination = parsedValue
+	return nil
+}`
+            },
+            {raw:
+`// intoUint64 is a constructor for uint64Scanner.
+func intoUint64(destination *uint64) uint64Scanner {
+	return uint64Scanner{destination: destination}
+}`,
+            }
+        ]
+    },
+    // fromUint64 isn't special compared to, say, fromUint32, but since
+    // intoUint64 is treated specially, I define fromUint64 near it here.
+    fromUint64: {
+        imports: {
+            "database/sql/driver": null,
+        },
+        declarations: [
+            {raw:
+`// uint64Valuer is a driver.Valuer that produces uint64
+type uint64Valuer struct {
+	source uint64
+}`
+            },
+            {raw:
+`func (valuer uint64Valuer) Value() (driver.Value, error) {
+	if valuer.source == 0 {
+		return nil, nil
+	}
+
+    return valuer.source, nil
+}`
+            },
+            {raw:
+`// fromUint64 is a constructor for uint64Valuer.
+func fromUint64(source uint64) uint64Valuer {
+	return uint64Valuer{source: source}
+}`
+            }
+        ]
+    },
+    // intoBytes is trivial: the sql package's default behavior does the right
+    // thing for `[]byte`. I define a wrapper function, even though one is not
+    // necessary, for consistency with the other types.
+    intoBytes: {
+        imports: {},
+        declarations: [
+            {raw:
+`// intoBytes returns its argument. This function is provided for
+// consistency with other output parameter types.
+func intoBytes(destination *[]byte) *[]byte {
+    return destination
+}`
+            }
+        ]
+    },
+    // fromBytes is special, because in order to determine the nullness of a
+    // `[]byte`, we have to use the `len` function.
+    fromBytes: {
+        imports: {
+            "database/sql/driver": null,
+        },
+        declarations: [
+            {raw:
+`// bytesValuer is a driver.Valuer that produces []byte
+type bytesValuer struct {
+	source []byte
+}`
+            },
+            {raw:
+`func (valuer bytesValuer) Value() (driver.Value, error) {
+	if len(valuer.source) == 0 {
+		return nil, nil
+	}
+
+    return valuer.source, nil
+}`
+            },
+            {raw:
+`// fromBytes is a constructor for bytesValuer.
+func fromBytes(source []byte) bytesValuer {
+	return bytesValuer{source: source}
+}`
+            }
+        ]
+    },
+    // intoEnum is special because there can be many enum types, each of which
+    // is just an int32. Rather than have a separate Scanner for each enum
+    // type, I define one that uses int32 and a function that assigns to the
+    // correct enum type. This way, the per-enum type information is
+    // encapsulated in a trivial anonymous function at the call site, e.g.
+    //
+    //     rows.Scan(intoEnum(func(value int32) {message.FavoriteColor = Color(value) })
+    //
+    intoEnum: {
+        imports: {
+            'database/sql': null
+        },
+        declarations: [
+            {raw:
+`type enumScanner struct {
+	// flush assigns the specified int32 to the destination enum field.
+	// The idea is that enumScanner doesn't know about the underlying
+	// enum type. That information is encapsulated within flush.
+	flush        func(int32)
+	intermediary sql.NullInt64
+}`
+            },
+            {raw:
+`func (scanner enumScanner) Scan(value interface{}) error {
+	if err := scanner.intermediary.Scan(value); err != nil {
+		return err
+	}
+
+	var intValue int32
+	if scanner.intermediary.Valid {
+		intValue = int32(scanner.intermediary.Int64)
+	}
+	scanner.flush(intValue)
+	return nil
+}`
+            },
+            {raw:
+`// intoEnum is a constructor for enumScanner.
+func intoEnum(flush func(int32)) enumScanner {
+	return enumScanner{flush: flush}
+}`
+            }
+        ]
     }
 };
+
+// The following input/output parameter handling types/functions are so
+// similar, they can be generated together: float64, float32,
+// int64, int32, uint32, bool, and string. The other types are handled
+// specially above.
+// The following code registers the following Go functions: fromFloat64,
+// intoFloat64, fromFloat32, intoFloat32, fromInt64, intoInt64, fromInt32,
+// intoInt32, fromUint32, intoUint32, fromBool, intoBool, fromString, and
+// intoString.
+Object.entries({
+    // Each entry has the following structure:
+    //
+    //     <Go type name>: {
+    //         nullType: <Go sql null wrapper type>,
+    //         valueType: <Go type for inserting into database>,
+    //         zeroValue: <Go zero value>
+    //     }
+    //
+    float64: {nullType: 'sql.NullFloat64', valueType: 'float64', zeroValue: '0'},
+    float32: {nullType: 'sql.NullFloat64', valueType: 'float64', zeroValue: '0'},
+    int64: {nullType: 'sql.NullInt64', valueType: 'int64', zeroValue: '0'},
+    int32: {nullType: 'sql.NullInt64', valueType: 'int64', zeroValue: '0'},
+    uint32: {nullType: 'sql.NullInt64', valueType: 'int64', zeroValue: '0'},
+    // bool is strange: Go false -> SQL null, because false value cannot be
+    // distinguished from field absence. It's the same as with the numeric
+    // types, but is more conspicuous with bool because it has only two values.
+    bool: {nullType: 'sql.NullBool', valueType: 'bool', zeroValue: 'false'},
+    string: {nullType: 'sql.NullString', valueType: 'string', zeroValue: '""'}
+}).forEach(([type, {nullType, valueType, zeroValue}]) => {
+    // There are two functions associated with each type: `from____` and
+    // `into____`. Each of those two functions has associated with it a helper
+    // type (a Valuer or a Scanner, respectively), and each of those helper
+    // types has a method (Value() or Scan(), respectively).
+
+    // e.g. "bool" ->"Bool"
+    const typeTitle = type[0].toUpperCase() + type.slice(1);
+
+    // e.g. "fromBool"
+    prerenderedDeclarations[`from${typeTitle}`] = {
+        imports: {
+            "database/sql/driver": null,
+        },
+        declarations: [
+            {raw:
+`// ${type}Valuer is a driver.Valuer that produces ${type}
+type ${type}Valuer struct {
+	source ${type}
+}`
+            },
+            {raw:
+`func (valuer ${type}Valuer) Value() (driver.Value, error) {
+	if valuer.source == ${zeroValue} {
+		return nil, nil
+	}
+
+    return ${valueType}(valuer.source), nil
+}`
+            },
+            {raw:
+`// from${typeTitle} is a constructor for ${type}Valuer.
+func from${typeTitle}(source ${type}) ${type}Valuer {
+	return ${type}Valuer{source: source}
+}`
+            }
+        ]
+    };
+
+    // sql.NullInt64, for example, contains two fields: Valid bool and Int64
+    // int64. `valueField` is the name of the int64 field, i.e. "Int64". We
+    // need this to access the scanned value.
+    // e.g. "sql.NullInt64" -> "Int64"
+    const valueField = nullType.slice('sql.Null'.length);
+
+    // e.g. "intoBool"
+    prerenderedDeclarations[`into${typeTitle}`] = {
+        imports: {
+            "database/sql": null
+        },
+        declarations: [
+            {raw:
+`type ${type}Scanner struct {
+	destination  *${type}
+	intermediary ${nullType}
+}`
+            },
+            {raw:
+`func (scanner ${type}Scanner) Scan(value interface{}) error {
+	err := scanner.intermediary.Scan(value)
+	if err != nil {
+		return err
+	}
+
+	if scanner.intermediary.Valid {
+		*scanner.destination = ${type}(scanner.intermediary.${valueField})
+	} else {
+        *scanner.destination = ${zeroValue}
+	}
+
+	return nil
+}`
+            },
+            {raw:
+`// into${typeTitle} is a constructor for ${type}Scanner.
+func into${typeTitle}(destination *${type}) ${type}Scanner {
+    return ${type}Scanner{destination: destination}
+}`
+            }
+        ]
+    };
+});
 
 return prerenderedDeclarations;
 

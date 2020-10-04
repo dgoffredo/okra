@@ -35,7 +35,7 @@ character set utf8mb4;
 
 create table `boy_scout_badges`(
     `id` varchar(255) not null comment 'id of the relevant .scouts.BoyScout',
-    `value` int not null comment 'one of the badges in some .scouts.BoyScout',
+    `value` int null comment 'one of the badges in some .scouts.BoyScout',
     foreign key (`id`) references `boy_scout`(`id`),
     foreign key (`value`) references `badge`(`id`),
     index (`id`))

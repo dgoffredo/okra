@@ -7,7 +7,11 @@
     // $a.$b.$c
     const dot = {'dot': [String, ...etc(1)]};
 
-    const {expression, index} = recursive(({index, expression}) => ({
+    // e.g. the name of a variable
+    const symbol = {'symbol': String};
+
+    const {expression, index, statement} =
+        recursive(({expression, index, statement}) => ({
         // $object[$index]
         index: {'index': {
             'object': or(String, dot),
@@ -34,7 +38,7 @@
             null,
     
             // e.g. the name of a variable
-            {'symbol': String},
+            symbol,
     
             // $function($arguments)
             {'call': {
@@ -72,107 +76,113 @@
             {'not': expression},
             
             // $object[$index]
-            index)
+            index,
+
+            // func($arg) { $body }
+            {'unaryOneLineCallback': {
+                'argument': {
+                    'name': String,
+                    'type': or(dot, String)
+                },
+                'body': statement
+            }}),
+
+        statement: or(
+            // see `expression`, defined above
+            expression,
+    
+            // $left = $right
+            {'assign': {
+                'left': [or(String, dot, index, symbol), ...etc],
+                'right': [expression, ...etc]
+            }},
+    
+            // $left = func($parameters) $results {
+            //     $body
+            // }
+            {'assignFunc': {
+                'left': or(String, dot, index, symbol),
+                'parameters': [{'name?': String, 'type': String}, ...etc],
+                'results': [{'name?': String, 'type': String}, ...etc],
+                'body': [statement, ...etc]
+            }},
+    
+            // if $condition {
+            //     $body
+            // }
+            //
+            // or
+            //
+            // if $condition {
+            //     $body
+            // }
+            // else {
+            //     $elseBody
+            // }
+            {'if': {
+                'condition': expression,
+                'body': [statement, ...etc],
+                'elseBody?': [statement, ...etc]
+            }},
+    
+            {'rangeFor': {
+                // for $variables := range $sequence {
+                //     $body
+                // }
+                'variables': [String, ...etc],
+                'sequence': expression,
+                'body': [statement, ...etc]
+            }},
+    
+            {'conditionFor': {
+                // for $condition {
+                //     $body
+                // }
+                'condition': expression,
+                'body': [statement, ...etc]
+            }},
+    
+            {'iterationFor': {
+                // for $init; $condition; $post {
+                //     $body
+                // }
+                'init?': statement,
+                'condition?': expression,
+                'post?': statement,
+                'body': [statement, ...etc]
+            }},
+            
+            // return $expression, ...
+            {'return': [expression, ...etc]},
+    
+            // a `spacer` is used to emit the specified number of empty lines, for
+            // separating logical sections of code within a block.
+            {'spacer': Number},
+            
+            // Most variable declarations go at the top of the function, in a
+            // dedicated section (and are not considered statements). However,
+            // sometimes it's convenient to declare a variable for temporary use,
+            // so the `variable` statement is allowed.
+            //
+            // var $name $type = $value
+            {'variable': {
+                'name': String,
+                'type': String,
+                'value?': expression
+            }},
+            
+            // defer $expression
+            {'defer': expression},
+             
+            // A `thunk` is a zero-parameter function meant to be used as a
+            // callback. Here we combine it with Go's `defer` statement to create
+            // a dedicated statement similar to D's `scope(exit)`.
+            // 
+            //     defer func() {
+            //         $statement ...
+            //     }()
+            {'deferThunk': [statement, ...etc]})
     }));
-
-    // $var $type
-    // or
-    // $var $type = $value
-    const variable = {
-        'name': String,
-        'type': String,
-        'value?': expression
-    };
-
-    const statement = recursive(statement => or(
-        // see `expression`, defined above
-        expression,
-
-        // $left = $right
-        {'assign': {
-            'left': [or(String, dot, index), ...etc],
-            'right': [expression, ...etc]
-        }},
-
-        // $left = func($parameters) $results {
-        //     $body
-        // }
-        {'assignFunc': {
-            'left': or(String, dot, index),
-            'parameters': [{'name?': String, 'type': String}, ...etc],
-            'results': [{'name?': String, 'type': String}, ...etc],
-            'body': [statement, ...etc]
-        }},
-
-        // if $condition {
-        //     $body
-        // }
-        //
-        // or
-        //
-        // if $condition {
-        //     $body
-        // }
-        // else {
-        //     $elseBody
-        // }
-        {'if': {
-            'condition': expression,
-            'body': [statement, ...etc],
-            'elseBody?': [statement, ...etc]
-        }},
-
-        {'rangeFor': {
-            // for $variables := range $sequence {
-            //     $body
-            // }
-            'variables': [String, ...etc],
-            'sequence': expression,
-            'body': [statement, ...etc]
-        }},
-
-        {'conditionFor': {
-            // for $condition {
-            //     $body
-            // }
-            'condition': expression,
-            'body': [statement, ...etc]
-        }},
-
-        {'iterationFor': {
-            // for $init; $condition; $post {
-            //     $body
-            // }
-            'init?': statement,
-            'condition?': expression,
-            'post?': statement,
-            'body': [statement, ...etc]
-        }},
-        
-        // return $expression, ...
-        {'return': [expression, ...etc]},
-
-        // a `spacer` is used to emit the specified number of empty lines, for
-        // separating logical sections of code within a block.
-        {'spacer': Number},
-        
-        // Most variable declarations go at the top of the function, in a
-        // dedicated section (and are not considered statements). However,
-        // sometimes it's convenient to declare a variable for termporary use,
-        // so the `variable` statement is allowed.
-        {'variable': variable},
-        
-        // defer $expression
-        {'defer': expression},
-         
-        // A `thunk` is a zero-parameter function meant to be used as a
-        // callback. Here we combine it with Go's `defer` statement to create
-        // a dedicated statement similar to D's `scope(exit)`.
-        // 
-        //     defer func() {
-        //         $statement ...
-        //     }()
-        {'deferThunk': [statement, ...etc]}));
 
     const file = {
         'documentation?': String, // commented per-line
@@ -200,9 +210,10 @@
                     // There are a couple exceptions: loop variables and
                     // temporaries used for database value scanning.
                     'variables': [{
-                        // everything in the `variable` schema
-                        ...variable,
-                        // and optionally a `defer func() {...}()` for cleanup
+                        'name': String,
+                        'type': String,
+                        'value?': expression,
+                        // optionally a `defer func() {...}()` for cleanup
                         'defer?': [statement, ...etc]
                     }, ...etc],
                     'statements': [statement, ...etc]
