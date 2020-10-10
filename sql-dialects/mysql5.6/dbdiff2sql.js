@@ -153,8 +153,9 @@ ${clauses.join(',\n')}`;
 
 function updateRow(table, update) {
     const tableName = quoteName(table.name);
-    // Tables whose rows we update will have a primary key.
-    const keyColumnName = quoteName(table.primaryKey);
+    // Tables whose rows we update will have a primary key containing a single
+    // column.
+    const keyColumnClauses = quoteName(table.primaryKey[0]);
     const keyValue = value2sql(update.primaryKeyValue);
     const edits = Object.entries(update.columnValues).map(
         ([column, value]) => `set ${quoteName(column)} = ${value2sql(value)}`);
@@ -180,7 +181,7 @@ function createTable(table) {
 
     const keyClauses = [];
     if ('primaryKey' in table) {
-        keyClauses.push(`primary key (${quoteName(table.primaryKey)})`);
+        keyClauses.push(`primary key (${table.primaryKey.map(quoteName).join(', ')})`);
     }
 
     keyClauses.push(...table.columns

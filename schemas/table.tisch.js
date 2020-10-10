@@ -7,7 +7,7 @@
 define(['./builtin.tisch.js'], builtin => ({
     'name': String,
     'description?': String, // e.g. COMMENT section in MySQL
-    'primaryKey?': String, // column name of the primary key
+    'primaryKey?': [String, ...etc], // names of columns in the primary key
     'columns': [{
         'name': String,
         // Column types are one of the builtins, or a special type used only

@@ -42,6 +42,8 @@ define(['./table.tisch.js', './alteration.tisch.js'], function (table, alteratio
                 'updates': [{
                     // value in the primary key column of the row to modify;
                     // this is used in the INSERT statement's WHERE clause.
+                    // Tables whose rows we modify will always have a primary
+                    // key consisting of a single column.
                     'primaryKeyValue': or(Number, String),
                     // columns to update, and which values to set them to;
                     // each entry is a (column_name, new_value) pair.
