@@ -17,11 +17,14 @@
                 condition: {
                     included: "hotdog"
                 },
-                tuple: "(?, ?)",
-                sql: "insert into `grill_hotdog`( `id`, `value`) values",
+                tuple: "(?, ?, ?)",
+                sql: "insert into `grill_hotdog`( `id`, `ordinality`, `value`) values",
                 parameters: [
                     {
                         field: "id"
+                    },
+                    {
+                        index: "hotdog"
                     },
                     {
                         field: "hotdog"
@@ -49,7 +52,7 @@
             },
             {
                 instruction: "query",
-                sql: "select `value` from `grill_hotdog` where `id` = ?;",
+                sql: "select `value` from `grill_hotdog` where `id` = ? order by `ordinality`;",
                 parameters: [
                     {
                         field: "id"
@@ -70,15 +73,8 @@
                 parameters: [{field: "id"}]
             },
             { instruction: 'read-row', destinations: [ 'ignore' ] },
-            {
-                instruction: "exec",
-                sql: "update `grill` set where `id` = ?;",
-                parameters: [
-                    {
-                        field: "id"
-                    }
-                ]
-            },
+            // Since there are no "grill" columns to update, there's no
+            // "update" here.
             {
                 instruction: "exec",
                 sql: "delete from `grill_hotdog` where `id` = ?;",
@@ -96,11 +92,14 @@
                 condition: {
                     included: "hotdog"
                 },
-                tuple: "(?, ?)",
-                sql: "insert into `grill_hotdog`( `id`, `value`) values",
+                tuple: "(?, ?, ?)",
+                sql: "insert into `grill_hotdog`( `id`, `ordinality`, `value`) values",
                 parameters: [
                     {
                         field: "id"
+                    },
+                    {
+                        index: "hotdog"
                     },
                     {
                         field: "hotdog"

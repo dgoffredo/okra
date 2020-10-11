@@ -18,11 +18,14 @@
         condition: {
           included: "stuff"
         },
-        tuple: "(?, ?)",
-        sql: "insert into `update_item_stuff`( `id`, `value`) values",
+        tuple: "(?, ?, ?)",
+        sql: "insert into `update_item_stuff`( `id`, `ordinality`, `value`) values",
         parameters: [
           {
             field: "id"
+          },
+          {
+            index: "stuff"
           },
           {
             field: "stuff"
@@ -50,7 +53,7 @@
       },
       {
         instruction: "query",
-        sql: "select `value` from `update_item_stuff` where `id` = ?;",
+        sql: "select `value` from `update_item_stuff` where `id` = ? order by `ordinality`;",
         parameters: [
           {
             field: "id"
@@ -73,15 +76,6 @@
       { instruction: 'read-row', destinations: [ 'ignore' ] },
       {
         instruction: "exec",
-        sql: "update `update_item` set where `id` = ?;",
-        parameters: [
-          {
-            field: "id"
-          }
-        ]
-      },
-      {
-        instruction: "exec",
         sql: "delete from `update_item_stuff` where `id` = ?;",
         parameters: [
           {
@@ -97,11 +91,14 @@
         condition: {
           included: "stuff"
         },
-        tuple: "(?, ?)",
-        sql: "insert into `update_item_stuff`( `id`, `value`) values",
+        tuple: "(?, ?, ?)",
+        sql: "insert into `update_item_stuff`( `id`, `ordinality`, `value`) values",
         parameters: [
           {
             field: "id"
+          },
+          {
+            index: "stuff"
           },
           {
             field: "stuff"

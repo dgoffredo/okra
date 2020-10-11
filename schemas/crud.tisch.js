@@ -106,18 +106,23 @@
         // multiple rows into a table, e.g. to update an array-valued field. Such
         // a SQL statement will look something like:
         //
-        //     insert into boyscout_badges(boyscout_id, badge_id)
-        //     values (?, ?), (?, ?), (?, ?), (?, ?), ...
+        //     insert into boyscout_badges(boyscout_id, ordinality, badge_id)
+        //     values (?, ?, ?), (?, ?, ?), (?, ?, ?), (?, ?, ?), ...
         //
-        // where there's one "(?, ?)" per row, i.e. per value in the
+        // where there's one "(?, ?, ?)" per row, i.e. per value in the
         // array-valued field. In an `exec-with-tuples` instruction for the
-        // example above, the `tuple` is "(?, ?)" and the `sql` is everything
-        // before the first "(?, ?)". Exactly one of the `parameters` will be
+        // example above, the `tuple` is "(?, ?, ?)" and the `sql` is everything
+        // before the first "(?, ?, ?)". Exactly one of the `parameters` will be
         // array-valued or a FieldMask, and its length determines the number
         // of copies of `tuple`. Other parameters are to be repeated for each
         // element in the array-valued parameter (e.g. the `boyscout_id` is
         // always the same, while the `badge_id` varies with the values in the
         // array-valued parameter).
+        //
+        // Additionally, a parameter may be of the form `{index: String}`, in
+        // which case the expected value is the zero-based index of the named
+        // array-like field. This will be used for the "ordinality" column in
+        // array tables.
         //
         // If the array-valued field is empty, then do not execute the SQL.
         {
@@ -131,10 +136,9 @@
             'condition?': {'included': String}, // _and_ nonempty
             'tuple': String,
             'sql': String,
-            // I imagine that `parameters` will only ever contain
-            // `{field: ...}` parameters, not `{included: ...}` parameters, but
-            // still both are allowed.
-            'parameters': [inputParameter, ...etc]
+            // I imagine that `parameters` will never contain `{included:
+            // ...}` parameters, but it is still allowed here.
+            'parameters': [or(inputParameter, {'index': String}), ...etc]
         });
 
     return {

@@ -1007,29 +1007,44 @@ function performExecWithTuples({
     // Verify that exactly one of the `instruction.parameters` has array or
     // FieldMask type.
     // Also, verify that all of the `instruction.parameters` have the shape
-    // `{field: ...}` (instead of `{included: ...}`).
+    // `{field: ...}` or `{index: ...}` (instead of `{included: ...}`).
     instruction.parameters.forEach(parameter => {
-        if (!('field' in parameter)) {
+        if (!('field' in parameter) && !('index' in parameter)) {
             throw Error(`Expected "exec-with-tuples" parameters to be of ` +
-                `{field: ...} kind, but encountered: ` +
+                `{field: ...} or {index: ...} kind, but encountered: ` +
                 `${JSON.stringify(parameter)} in instruction: ` +
                 JSON.stringify(instruction));
         }
     });
 
+    // Now I assume more about the `instruction`. I expect that it will have
+    // one array-valued `field` parameter, and one `index` parameter, and that
+    // they will refer to the same field name.
+    // The idea is that we're inserting into an array table, and we'll need the
+    // value of each element in the array (that's the field) and the index of
+    // each value (that's the index parameter).
     const arrayLikes = instruction.parameters.filter(parameter => {
-        const parameterType = typeByField[parameter.field];
+        const parameterType = typeByField[parameter.field || parameter.index];
         return parameterType.array ||
             parameterType.builtin === '.google.protobuf.FieldMask';
     });
 
-    if (arrayLikes.length !== 1) {
+    if (arrayLikes.length !== 2) {
         throw Error(`Expected "exec-with-tuples" parameters to contain ` +
-            `exactly one array-valued or FieldMask field, but found ` + 
+            `two array-related or FieldMask-related parameters, but found ` + 
             `${arrayLikes.length}: ` + JSON.stringify(arrayLikes));
     }
 
-    const [arrayLikeField] = arrayLikes.map(parameter => parameter.field);
+    const [first, second] = arrayLikes.map(
+        parameter => parameter.field || parameter.index);
+    if (first !== second) {
+        throw Error('Expected "exec-with-tuples" array-related or ' +
+            'FieldMask-related parameters to refer to the same field, but ' +
+            'the two refer to different fields: ' +
+            JSON.stringify([first, second]));
+    }
+
+    const arrayLikeField = first; // or `second`
     
     // If the `arrayLikeField` is an array, then we can `range` loop over it
     // normally, and we can get its length using `len`. If it's a FieldMask,
@@ -1040,13 +1055,14 @@ function performExecWithTuples({
     const rangeArgumentParts = arrayLikeType.array
         ? ['message', field2go(arrayLikeField)] // e.g. message.Pets
         : ['message', field2go(arrayLikeField), 'Paths'] // e.g. messages.MustHaves.Paths
+    const arrayElementType = arrayLikeType.array || {builtin: 'TYPE_STRING'};
 
     // Here's what we're going for:
     //
     //     if $included && $lenFunctionName($array) != 0 {
     //         parameters = nil // clear the slice
     //
-    //         for _, element := range $rangeArgument {
+    //         for i, element := range $rangeArgument {
     //             parameters = append(parameters, [...], element, [...])
     //         }
     //
@@ -1108,11 +1124,11 @@ function performExecWithTuples({
                     right: [null]
                 }},
 
-                // for _, element := range message.$array {
+                // for i, element := range message.$array {
                 //     ...
                 // }
                 {rangeFor: {
-                    variables: ['_', 'element'],
+                    variables: ['i', 'element'],
                     sequence: {dot: rangeArgumentParts},
                     body: [
                         // parameters = append(parameters, [...], element, [...])
@@ -1131,7 +1147,15 @@ function performExecWithTuples({
                                     // this time around the loop.
                                     ...instruction.parameters.map(parameter => {
                                         if (parameter.field === arrayLikeField) {
-                                            return {symbol: 'element'};
+                                            // the array element
+                                            return inputExpression({
+                                                okraType: arrayElementType,
+                                                expression: {symbol: 'element'}
+                                            });
+                                        }
+                                        else if (parameter.index === arrayLikeField) {
+                                            // the array index
+                                            return {symbol: 'i'};
                                         }
                                         else {
                                             return inputParameter2expression({
@@ -1757,56 +1781,66 @@ function variableAdder(variables) {
     };
 }
 
-// Return an a Go AST expressions for the specified `parameter` that can appear
+// Return an a Go AST expression based on the specified `expression` of the
+// specified `okraType` that can appear as input parameters to database
+// methods like `Query` and `Exec`.
+// For example, if `expression` renders as `message.age` and `okraType` is
+// `{builtin: "TYPE_INT32}`, then `inputExpression` would return an expression
+// that renders as `fromInt32(message.age)`.
+function inputExpression({okraType, expression}) {
+    if (okraType.enum) {
+        // Enums are special in that they must first be cast to int32 for
+        // generic use.
+        return {
+            // fromInt32(int32($expression))
+            call: {
+                function: 'fromInt32',
+                arguments: [{
+                    call: {
+                        function: 'int32', // not a function, but same syntax
+                        arguments: [expression]
+                    }
+                }]
+            }
+        };
+    }
+
+    // If it's not an enum, then it's builtin, and we just call the
+    // appropriate "from___" function, e.g. "fromString".
+    const functionName = ({
+        // okra type -> name of function that returns a Valuer for
+        // variables of that type
+        '.google.protobuf.Timestamp': 'fromTimestamp',
+        '.google.type.Date': 'fromDate',
+        'TYPE_DOUBLE': 'fromFloat64',
+        'TYPE_FLOAT': 'fromFloat32',
+        'TYPE_INT64': 'fromInt64',
+        'TYPE_UINT64': 'fromUint64',
+        'TYPE_INT32': 'fromInt32',
+        'TYPE_UINT32': 'fromUint32',
+        'TYPE_BOOL': 'fromBool',
+        'TYPE_STRING': 'fromString',
+        'TYPE_BYTES': 'fromBytes'
+    }[okraType.builtin]);
+
+    return {
+        // $functionName($expression)
+        call: {
+            function: functionName,
+            arguments: [expression]
+        }
+    };
+}
+
+// Return an a Go AST expression for the specified `parameter` that can appear
 // as input parameters to database methods like `Query` and `Exec`. This code
 // is common to relevant CRUD instructions.
 function inputParameter2expression({parameter, typeByField, included}) {
     if (parameter.field) {
-        const type = typeByField[parameter.field]; // okra type
+        const okraType = typeByField[parameter.field]; // okra type
         const member = field2go(parameter.field); // Go struct field name
-
-        if (type.enum) {
-            // Enums are special in that they must first be cast to int32 for
-            // generic use.
-            return {
-                // fromInt32(int32(message.$member))
-                call: {
-                    function: 'fromInt32',
-                    arguments: [{
-                        call: {
-                            function: 'int32', // not a function, but same syntax
-                            arguments: [{dot: ['message', member]}]
-                        }
-                    }]
-                }
-            };
-        }
-
-        // If it's not an enum, then it's builtin, and we just call the
-        // appropriate "from___" function, e.g. "fromString".
-        const functionName = ({
-            // okra type -> name of function that returns a Valuer for
-            // variables of that type
-            '.google.protobuf.Timestamp': 'fromTimestamp',
-            '.google.type.Date': 'fromDate',
-            'TYPE_DOUBLE': 'fromFloat64',
-            'TYPE_FLOAT': 'fromFloat32',
-            'TYPE_INT64': 'fromInt64',
-            'TYPE_UINT64': 'fromUint64',
-            'TYPE_INT32': 'fromInt32',
-            'TYPE_UINT32': 'fromUint32',
-            'TYPE_BOOL': 'fromBool',
-            'TYPE_STRING': 'fromString',
-            'TYPE_BYTES': 'fromBytes'
-        }[type.builtin]);
-
-        return {
-            // $functionName(message.$member)
-            call: {
-                function: functionName,
-                arguments: [{dot: ['message', member]}]
-            }
-        };
+        const expression = {dot: ['message', member]};
+        return inputExpression({okraType, expression});
     }
     else {
         // Instead of referencing a field value, we're asking whether the

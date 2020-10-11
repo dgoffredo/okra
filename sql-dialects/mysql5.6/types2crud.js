@@ -114,13 +114,21 @@ function instructionInsertArray({
     return {
         instruction: 'exec-with-tuples',
         condition: {included: arrayField},
-        tuple: `(${parameter(messageIdFieldType)}, ${parameter(arrayFieldType)})`,
+        // tuple is, e.g. "(?, ?, ?)" or "(?, ?, from_unixtime(...))"
+        tuple: '(' + [
+            messageIdFieldType,
+            {builtin: 'TYPE_UINT32'},
+            arrayFieldType
+        ].map(parameter).join(', ') + ')',
         sql: sqline(`insert into
             ${quoteName(arrayTableName)}(
-                ${quoteName('id')}, ${quoteName('value')})
+                ${quoteName('id')},
+                ${quoteName('ordinality')},
+                ${quoteName('value')})
             values `),
         parameters: [
             {field: messageIdField},
+            {index: arrayField},
             {field: arrayField}
         ]
     };
@@ -149,7 +157,8 @@ function instructionSelectArray({
         // and to put its value into the array field.
         sql: sqline(`select ${selector({columnName: 'value', fieldType: elementType})}
                 from ${quoteName(arrayTableName)}
-                where ${quoteName('id')} = ${parameter(messageIdFieldType)};`),
+                where ${quoteName('id')} = ${parameter(messageIdFieldType)}
+                order by ${quoteName('ordinality')};`),
         parameters: [
             {field: messageIdField}
         ]
@@ -283,7 +292,10 @@ function instructionUpdateMessage({type, legend}) {
         .filter(({fieldName}) => fieldName !== type.idFieldName)
         .map(entry => ({...entry, fieldType: fieldTypes[entry.fieldName]}));
 
-    if (scalarFieldSources.length === 0) {
+    if (scalarFieldSources.length === 1) {
+        // If there's only one scalar field, then that's just the ID. In that
+        // case, there's nothing to update, so return `undefined` to indicate
+        // this to the caller.
         return;
     }
 
@@ -466,7 +478,7 @@ function instructionsUpdateMessage({type, legend}) {
             }),
 
             // e.g.
-            // insert into boyscout_badges values (?, ?), (?, ?) ...
+            // insert into boyscout_badges values (?, ?, ?), (?, ?, ?) ...
             instructionInsertArray({
                 arrayTableName: tableName,
                 messageIdField: type.idFieldName,

@@ -5,7 +5,7 @@ define(['./builtin.tisch.js'], function (builtin) {
         {
             'kind': 'alterColumn',
             // There are two modifications that can be made to an existing column:
-            // - change to type, e.g. to widen an integer
+            // - change the type, e.g. to widen an integer
             // - change the documentation
             //
             // However, all of the following properties must have values,

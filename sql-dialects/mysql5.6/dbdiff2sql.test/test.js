@@ -15,6 +15,10 @@ const {dbdiff2sql} = require('../dbdiff2sql');
 // For each (*.before.proto, *.after.proto) pair, get the SQL for the resulting
 // dbdiff, and compare it with *.sql, which is the expected output of dbdiff2sql.
 
+// TODO: To test "from scratch" SQL generation, search first for *.sql, and
+// then if there's no corresponding *.{before,after}.proto files, consider it
+// "from scratch" and look instead just for *.proto.
+
 const befores = glob(path.join(__dirname, '*.before.proto'));
 
 befores.forEach(beforePath => {

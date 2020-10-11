@@ -40,10 +40,10 @@ func CreateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err 
 
 	if len(message.Badges) != 0 {
 		parameters = nil
-		for _, element := range message.Badges {
-			parameters = append(parameters, fromString(message.Id), element)
+		for i, element := range message.Badges {
+			parameters = append(parameters, fromString(message.Id), i, fromInt32(int32(element)))
 		}
-		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_badges`( `id`, `value`) values", "(?, ?)", len(message.Badges)), parameters...)
+		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_badges`( `id`, `ordinality`, `value`) values", "(?, ?, ?)", len(message.Badges)), parameters...)
 		if err != nil {
 			return
 		}
@@ -51,10 +51,10 @@ func CreateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err 
 
 	if len(message.FavoriteSongs) != 0 {
 		parameters = nil
-		for _, element := range message.FavoriteSongs {
-			parameters = append(parameters, fromString(message.Id), element)
+		for i, element := range message.FavoriteSongs {
+			parameters = append(parameters, fromString(message.Id), i, fromString(element))
 		}
-		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_favorite_songs`( `id`, `value`) values", "(?, ?)", len(message.FavoriteSongs)), parameters...)
+		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_favorite_songs`( `id`, `ordinality`, `value`) values", "(?, ?, ?)", len(message.FavoriteSongs)), parameters...)
 		if err != nil {
 			return
 		}
@@ -62,10 +62,10 @@ func CreateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err 
 
 	if len(message.CampingTrips) != 0 {
 		parameters = nil
-		for _, element := range message.CampingTrips {
-			parameters = append(parameters, fromString(message.Id), element)
+		for i, element := range message.CampingTrips {
+			parameters = append(parameters, fromString(message.Id), i, fromDate(element))
 		}
-		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_camping_trips`( `id`, `value`) values", "(?, ?)", len(message.CampingTrips)), parameters...)
+		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_camping_trips`( `id`, `ordinality`, `value`) values", "(?, ?, ?)", len(message.CampingTrips)), parameters...)
 		if err != nil {
 			return
 		}
@@ -73,10 +73,10 @@ func CreateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err 
 
 	if fieldMaskLen(message.Mask) != 0 {
 		parameters = nil
-		for _, element := range message.Mask.Paths {
-			parameters = append(parameters, fromString(message.Id), element)
+		for i, element := range message.Mask.Paths {
+			parameters = append(parameters, fromString(message.Id), i, fromString(element))
 		}
-		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_mask`( `id`, `value`) values", "(?, ?)", fieldMaskLen(message.Mask)), parameters...)
+		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_mask`( `id`, `ordinality`, `value`) values", "(?, ?, ?)", fieldMaskLen(message.Mask)), parameters...)
 		if err != nil {
 			return
 		}
@@ -127,7 +127,7 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err er
 	}
 	rows.Next()
 
-	rows, err = transaction.QueryContext(ctx, "select `value` from `boy_scout_badges` where `id` = ?;", fromString(message.Id))
+	rows, err = transaction.QueryContext(ctx, "select `value` from `boy_scout_badges` where `id` = ? order by `ordinality`;", fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -142,7 +142,7 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err er
 		message.Badges = append(message.Badges, temp)
 	}
 
-	rows, err = transaction.QueryContext(ctx, "select `value` from `boy_scout_favorite_songs` where `id` = ?;", fromString(message.Id))
+	rows, err = transaction.QueryContext(ctx, "select `value` from `boy_scout_favorite_songs` where `id` = ? order by `ordinality`;", fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -157,7 +157,7 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err er
 		message.FavoriteSongs = append(message.FavoriteSongs, temp)
 	}
 
-	rows, err = transaction.QueryContext(ctx, "select `value` from `boy_scout_camping_trips` where `id` = ?;", fromString(message.Id))
+	rows, err = transaction.QueryContext(ctx, "select `value` from `boy_scout_camping_trips` where `id` = ? order by `ordinality`;", fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -172,7 +172,7 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err er
 		message.CampingTrips = append(message.CampingTrips, temp)
 	}
 
-	rows, err = transaction.QueryContext(ctx, "select `value` from `boy_scout_mask` where `id` = ?;", fromString(message.Id))
+	rows, err = transaction.QueryContext(ctx, "select `value` from `boy_scout_mask` where `id` = ? order by `ordinality`;", fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -265,10 +265,10 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 
 	if included("badges") && len(message.Badges) != 0 {
 		parameters = nil
-		for _, element := range message.Badges {
-			parameters = append(parameters, fromString(message.Id), element)
+		for i, element := range message.Badges {
+			parameters = append(parameters, fromString(message.Id), i, fromInt32(int32(element)))
 		}
-		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_badges`( `id`, `value`) values", "(?, ?)", len(message.Badges)), parameters...)
+		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_badges`( `id`, `ordinality`, `value`) values", "(?, ?, ?)", len(message.Badges)), parameters...)
 		if err != nil {
 			return
 		}
@@ -283,10 +283,10 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 
 	if included("favorite_songs") && len(message.FavoriteSongs) != 0 {
 		parameters = nil
-		for _, element := range message.FavoriteSongs {
-			parameters = append(parameters, fromString(message.Id), element)
+		for i, element := range message.FavoriteSongs {
+			parameters = append(parameters, fromString(message.Id), i, fromString(element))
 		}
-		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_favorite_songs`( `id`, `value`) values", "(?, ?)", len(message.FavoriteSongs)), parameters...)
+		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_favorite_songs`( `id`, `ordinality`, `value`) values", "(?, ?, ?)", len(message.FavoriteSongs)), parameters...)
 		if err != nil {
 			return
 		}
@@ -301,10 +301,10 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 
 	if included("camping_trips") && len(message.CampingTrips) != 0 {
 		parameters = nil
-		for _, element := range message.CampingTrips {
-			parameters = append(parameters, fromString(message.Id), element)
+		for i, element := range message.CampingTrips {
+			parameters = append(parameters, fromString(message.Id), i, fromDate(element))
 		}
-		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_camping_trips`( `id`, `value`) values", "(?, ?)", len(message.CampingTrips)), parameters...)
+		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_camping_trips`( `id`, `ordinality`, `value`) values", "(?, ?, ?)", len(message.CampingTrips)), parameters...)
 		if err != nil {
 			return
 		}
@@ -319,10 +319,10 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 
 	if included("mask") && fieldMaskLen(message.Mask) != 0 {
 		parameters = nil
-		for _, element := range message.Mask.Paths {
-			parameters = append(parameters, fromString(message.Id), element)
+		for i, element := range message.Mask.Paths {
+			parameters = append(parameters, fromString(message.Id), i, fromString(element))
 		}
-		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_mask`( `id`, `value`) values", "(?, ?)", fieldMaskLen(message.Mask)), parameters...)
+		_, err = transaction.ExecContext(ctx, withTuples("insert into `boy_scout_mask`( `id`, `ordinality`, `value`) values", "(?, ?, ?)", fieldMaskLen(message.Mask)), parameters...)
 		if err != nil {
 			return
 		}
@@ -493,11 +493,6 @@ func UpdateGirlScout(ctx context.Context, db *sql.DB, message *pb.GirlScout, fie
 		return
 	}
 	rows.Next()
-
-	_, err = transaction.ExecContext(ctx, "update `girl_scout` set where `id` = ?;", fromString(message.Id))
-	if err != nil {
-		return
-	}
 
 	err = transaction.Commit()
 	return
