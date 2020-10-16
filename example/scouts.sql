@@ -20,6 +20,7 @@ create table `boy_scout`(
     `rank` int null,
     `iana_country_code` varchar(512) null comment 'playing with naming conventions',
     `what_about_this` bigint null,
+    `big_unsigned_int` bigint unsigned null comment 'uint64 is special',
     primary key (`id`),
     foreign key (`rank`) references `rank`(`id`))
 engine = InnoDB

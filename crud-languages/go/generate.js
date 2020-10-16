@@ -1805,8 +1805,16 @@ function inputExpression({okraType, expression}) {
         };
     }
 
-    // If it's not an enum, then it's builtin, and we just call the
-    // appropriate "from___" function, e.g. "fromString".
+    // If it's not an enum, then it's a builtin. `uint64` needs special
+    // treatment, because `uint64` is not a valid `driver.Value`, and so we
+    // have to impose the limitation that input values of type `uint64` are
+    // never null.
+    if (okraType.builtin == 'TYPE_UINT64') {
+        return expression;
+    }
+
+    // If it's not an enum or a `uint64`, then it's some other builtin, and we
+    // just call the appropriate "from___" function, e.g. "fromString".
     const functionName = ({
         // okra type -> name of function that returns a Valuer for
         // variables of that type
@@ -1815,7 +1823,6 @@ function inputExpression({okraType, expression}) {
         'TYPE_DOUBLE': 'fromFloat64',
         'TYPE_FLOAT': 'fromFloat32',
         'TYPE_INT64': 'fromInt64',
-        'TYPE_UINT64': 'fromUint64',
         'TYPE_INT32': 'fromInt32',
         'TYPE_UINT32': 'fromUint32',
         'TYPE_BOOL': 'fromBool',

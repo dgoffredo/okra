@@ -32,6 +32,9 @@ message BoyScout {
 
     // testing field masks
     google.protobuf.FieldMask mask = 15;
+
+    // uint64 is special
+    uint64 big_unsigned_int = 16;
 }
 
 message GirlScout {

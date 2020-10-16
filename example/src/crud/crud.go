@@ -13,6 +13,7 @@ import (
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"google.golang.org/genproto/googleapis/type/date"
 	"google.golang.org/genproto/protobuf/field_mask"
+	"strconv"
 	"strings"
 )
 
@@ -33,7 +34,7 @@ func CreateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err 
 		return
 	}
 
-	_, err = transaction.ExecContext(ctx, "insert into `boy_scout`( `id`, `full_name`, `short_name`, `birthdate`, `join_time`, `country_code`, `language_code`, `pack_code`, `rank`, `iana_country_code`, `what_about_this`) values (?, ?, ?, ?, from_unixtime(cast(? / 1000000.0 as decimal(20, 6))), ?, ?, ?, ?, ?, ?);", fromString(message.Id), fromString(message.FullName), fromString(message.ShortName), fromDate(message.Birthdate), fromTimestamp(message.JoinTime), fromString(message.CountryCode), fromString(message.LanguageCode), fromUint32(message.PackCode), fromInt32(int32(message.Rank)), fromString(message.IANACountryCode), fromInt64(message.WhatAboutThis))
+	_, err = transaction.ExecContext(ctx, "insert into `boy_scout`( `id`, `full_name`, `short_name`, `birthdate`, `join_time`, `country_code`, `language_code`, `pack_code`, `rank`, `iana_country_code`, `what_about_this`, `big_unsigned_int`) values (?, ?, ?, ?, from_unixtime(cast(? / 1000000.0 as decimal(20, 6))), ?, ?, ?, ?, ?, ?, ?);", fromString(message.Id), fromString(message.FullName), fromString(message.ShortName), fromDate(message.Birthdate), fromTimestamp(message.JoinTime), fromString(message.CountryCode), fromString(message.LanguageCode), fromUint32(message.PackCode), fromInt32(int32(message.Rank)), fromString(message.IANACountryCode), fromInt64(message.WhatAboutThis), message.BigUnsignedInt)
 	if err != nil {
 		return
 	}
@@ -110,7 +111,7 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err er
 		return
 	}
 
-	rows, err = transaction.QueryContext(ctx, "select `id`, `full_name`, `short_name`, `birthdate`, floor(unix_timestamp(`join_time`) * 1000000), `country_code`, `language_code`, `pack_code`, `rank`, `iana_country_code`, `what_about_this` from `boy_scout` where `id` = ?;", fromString(message.Id))
+	rows, err = transaction.QueryContext(ctx, "select `id`, `full_name`, `short_name`, `birthdate`, floor(unix_timestamp(`join_time`) * 1000000), `country_code`, `language_code`, `pack_code`, `rank`, `iana_country_code`, `what_about_this`, `big_unsigned_int` from `boy_scout` where `id` = ?;", fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -121,7 +122,7 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err er
 		return
 	}
 
-	err = rows.Scan(intoString(&message.Id), intoString(&message.FullName), intoString(&message.ShortName), intoDate(&message.Birthdate), intoTimestamp(&message.JoinTime), intoString(&message.CountryCode), intoString(&message.LanguageCode), intoUint32(&message.PackCode), intoEnum(func(value int32) { message.Rank = pb.Rank(value) }), intoString(&message.IANACountryCode), intoInt64(&message.WhatAboutThis))
+	err = rows.Scan(intoString(&message.Id), intoString(&message.FullName), intoString(&message.ShortName), intoDate(&message.Birthdate), intoTimestamp(&message.JoinTime), intoString(&message.CountryCode), intoString(&message.LanguageCode), intoUint32(&message.PackCode), intoEnum(func(value int32) { message.Rank = pb.Rank(value) }), intoString(&message.IANACountryCode), intoInt64(&message.WhatAboutThis), intoUint64(&message.BigUnsignedInt))
 	if err != nil {
 		return
 	}
@@ -251,7 +252,7 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 	}
 	rows.Next()
 
-	_, err = transaction.ExecContext(ctx, "update `boy_scout` set `full_name` = case when ? then ? else `full_name` end, `short_name` = case when ? then ? else `short_name` end, `birthdate` = case when ? then ? else `birthdate` end, `join_time` = case when ? then from_unixtime(cast(? / 1000000.0 as decimal(20, 6))) else `join_time` end, `country_code` = case when ? then ? else `country_code` end, `language_code` = case when ? then ? else `language_code` end, `pack_code` = case when ? then ? else `pack_code` end, `rank` = case when ? then ? else `rank` end, `iana_country_code` = case when ? then ? else `iana_country_code` end, `what_about_this` = case when ? then ? else `what_about_this` end where `id` = ?;", included("full_name"), fromString(message.FullName), included("short_name"), fromString(message.ShortName), included("birthdate"), fromDate(message.Birthdate), included("join_time"), fromTimestamp(message.JoinTime), included("country_code"), fromString(message.CountryCode), included("language_code"), fromString(message.LanguageCode), included("pack_code"), fromUint32(message.PackCode), included("rank"), fromInt32(int32(message.Rank)), included("IANA_country_code"), fromString(message.IANACountryCode), included("whatAboutThis"), fromInt64(message.WhatAboutThis), fromString(message.Id))
+	_, err = transaction.ExecContext(ctx, "update `boy_scout` set `full_name` = case when ? then ? else `full_name` end, `short_name` = case when ? then ? else `short_name` end, `birthdate` = case when ? then ? else `birthdate` end, `join_time` = case when ? then from_unixtime(cast(? / 1000000.0 as decimal(20, 6))) else `join_time` end, `country_code` = case when ? then ? else `country_code` end, `language_code` = case when ? then ? else `language_code` end, `pack_code` = case when ? then ? else `pack_code` end, `rank` = case when ? then ? else `rank` end, `iana_country_code` = case when ? then ? else `iana_country_code` end, `what_about_this` = case when ? then ? else `what_about_this` end, `big_unsigned_int` = case when ? then ? else `big_unsigned_int` end where `id` = ?;", included("full_name"), fromString(message.FullName), included("short_name"), fromString(message.ShortName), included("birthdate"), fromDate(message.Birthdate), included("join_time"), fromTimestamp(message.JoinTime), included("country_code"), fromString(message.CountryCode), included("language_code"), fromString(message.LanguageCode), included("pack_code"), fromUint32(message.PackCode), included("rank"), fromInt32(int32(message.Rank)), included("IANA_country_code"), fromString(message.IANACountryCode), included("whatAboutThis"), fromInt64(message.WhatAboutThis), included("big_unsigned_int"), message.BigUnsignedInt, fromString(message.Id))
 	if err != nil {
 		return
 	}
@@ -894,6 +895,37 @@ func (scanner int64Scanner) Scan(value interface{}) error {
 // intoInt64 is a constructor for int64Scanner.
 func intoInt64(destination *int64) int64Scanner {
 	return int64Scanner{destination: destination}
+}
+
+type uint64Scanner struct {
+	destination  *uint64
+	intermediary sql.NullString
+}
+
+func (scanner uint64Scanner) Scan(value interface{}) error {
+	if err := scanner.intermediary.Scan(value); err != nil {
+		return err
+	}
+
+	if !scanner.intermediary.Valid {
+		// !Valid -> null -> zero
+		*scanner.destination = 0
+		return nil
+	}
+
+	// parse a base-10 64-bit unsigned integer
+	parsedValue, err := strconv.ParseUint(scanner.intermediary.String, 10, 64)
+	if err != nil {
+		return err
+	}
+
+	*scanner.destination = parsedValue
+	return nil
+}
+
+// intoUint64 is a constructor for uint64Scanner.
+func intoUint64(destination *uint64) uint64Scanner {
+	return uint64Scanner{destination: destination}
 }
 
 // appendField adds the specified string to the end of the paths within the

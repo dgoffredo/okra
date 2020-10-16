@@ -72,7 +72,7 @@ const prerenderedDeclarations = {
             {raw:
 `// intoTimestamp is a constructor for timestampScanner.
 func intoTimestamp(destination **timestamp.Timestamp) timestampScanner {
-    return timestampScanner{destination: destination}
+	return timestampScanner{destination: destination}
 }`
             }
         ]
@@ -129,7 +129,7 @@ func intoTimestamp(destination **timestamp.Timestamp) timestampScanner {
             {raw:
 `// intoDate is a constructor for dateScanner.
 func intoDate(destination **date.Date) dateScanner {
-    return dateScanner{destination: destination}
+	return dateScanner{destination: destination}
 }`
             }
         ]
@@ -435,36 +435,9 @@ func intoUint64(destination *uint64) uint64Scanner {
             }
         ]
     },
-    // fromUint64 isn't special compared to, say, fromUint32, but since
-    // intoUint64 is treated specially, I define fromUint64 near it here.
-    fromUint64: {
-        imports: {
-            "database/sql/driver": null,
-        },
-        declarations: [
-            {raw:
-`// uint64Valuer is a driver.Valuer that produces uint64
-type uint64Valuer struct {
-	source uint64
-}`
-            },
-            {raw:
-`func (valuer uint64Valuer) Value() (driver.Value, error) {
-	if valuer.source == 0 {
-		return nil, nil
-	}
+    // Note that there is no `fromUint64`, because `uint64` is not a valid
+    // `driver.Value` type.
 
-    return valuer.source, nil
-}`
-            },
-            {raw:
-`// fromUint64 is a constructor for uint64Valuer.
-func fromUint64(source uint64) uint64Valuer {
-	return uint64Valuer{source: source}
-}`
-            }
-        ]
-    },
     // intoBytes is trivial: the sql package's default behavior does the right
     // thing for `[]byte`. I define a wrapper function, even though one is not
     // necessary, for consistency with the other types.
@@ -475,7 +448,7 @@ func fromUint64(source uint64) uint64Valuer {
 `// intoBytes returns its argument. This function is provided for
 // consistency with other output parameter types.
 func intoBytes(destination *[]byte) *[]byte {
-    return destination
+	return destination
 }`
             }
         ]
@@ -499,7 +472,7 @@ type bytesValuer struct {
 		return nil, nil
 	}
 
-    return valuer.source, nil
+	return valuer.source, nil
 }`
             },
             {raw:
@@ -610,7 +583,7 @@ type ${type}Valuer struct {
 		return nil, nil
 	}
 
-    return ${valueType}(valuer.source), nil
+	return ${valueType}(valuer.source), nil
 }`
             },
             {raw:
@@ -659,7 +632,7 @@ func from${typeTitle}(source ${type}) ${type}Valuer {
             {raw:
 `// into${typeTitle} is a constructor for ${type}Scanner.
 func into${typeTitle}(destination *${type}) ${type}Scanner {
-    return ${type}Scanner{destination: destination}
+	return ${type}Scanner{destination: destination}
 }`
             }
         ]
