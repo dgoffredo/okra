@@ -196,8 +196,7 @@ func ReadBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout) (err er
 // message that are indicated by the specified fieldMask, subject to
 // specified cancellation context ctx. Each element of fieldMask is the
 // name of a field in message whose value is to be used in the database
-// update. If fieldMask is empty or nil, then update all fields from
-// message. Return nil on success, or a non-nil error if an error occurs.
+// update. Return nil on success, or a non-nil error if an error occurs.
 func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, fieldMask []string) (err error) {
 	var transaction *sql.Tx
 	defer func() {
@@ -213,21 +212,11 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 	}()
 	var ok bool
 	var parameters []interface{}
-	var fieldMaskMap map[string]bool
-	var included func(string) bool
+	var included map[string]bool
 
-	if len(fieldMask) == 0 {
-		included = func(string) bool {
-			return true
-		}
-	} else {
-		fieldMaskMap = make(map[string]bool, len(fieldMask))
-		for _, field := range fieldMask {
-			fieldMaskMap[field] = true
-		}
-		included = func(field string) bool {
-			return fieldMaskMap[field]
-		}
+	included = make(map[string]bool, len(fieldMask))
+	for _, field := range fieldMask {
+		included[field] = true
 	}
 
 	transaction, err = db.BeginTx(ctx, nil)
@@ -252,19 +241,19 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 	}
 	rows.Next()
 
-	_, err = transaction.ExecContext(ctx, "update `boy_scout` set `full_name` = case when ? then ? else `full_name` end, `short_name` = case when ? then ? else `short_name` end, `birthdate` = case when ? then ? else `birthdate` end, `join_time` = case when ? then from_unixtime(cast(? / 1000000.0 as decimal(20, 6))) else `join_time` end, `country_code` = case when ? then ? else `country_code` end, `language_code` = case when ? then ? else `language_code` end, `pack_code` = case when ? then ? else `pack_code` end, `rank` = case when ? then ? else `rank` end, `iana_country_code` = case when ? then ? else `iana_country_code` end, `what_about_this` = case when ? then ? else `what_about_this` end, `big_unsigned_int` = case when ? then ? else `big_unsigned_int` end where `id` = ?;", included("full_name"), fromString(message.FullName), included("short_name"), fromString(message.ShortName), included("birthdate"), fromDate(message.Birthdate), included("join_time"), fromTimestamp(message.JoinTime), included("country_code"), fromString(message.CountryCode), included("language_code"), fromString(message.LanguageCode), included("pack_code"), fromUint32(message.PackCode), included("rank"), fromInt32(int32(message.Rank)), included("IANA_country_code"), fromString(message.IANACountryCode), included("whatAboutThis"), fromInt64(message.WhatAboutThis), included("big_unsigned_int"), message.BigUnsignedInt, fromString(message.Id))
+	_, err = transaction.ExecContext(ctx, "update `boy_scout` set `full_name` = case when ? then ? else `full_name` end, `short_name` = case when ? then ? else `short_name` end, `birthdate` = case when ? then ? else `birthdate` end, `join_time` = case when ? then from_unixtime(cast(? / 1000000.0 as decimal(20, 6))) else `join_time` end, `country_code` = case when ? then ? else `country_code` end, `language_code` = case when ? then ? else `language_code` end, `pack_code` = case when ? then ? else `pack_code` end, `rank` = case when ? then ? else `rank` end, `iana_country_code` = case when ? then ? else `iana_country_code` end, `what_about_this` = case when ? then ? else `what_about_this` end, `big_unsigned_int` = case when ? then ? else `big_unsigned_int` end where `id` = ?;", included["full_name"], fromString(message.FullName), included["short_name"], fromString(message.ShortName), included["birthdate"], fromDate(message.Birthdate), included["join_time"], fromTimestamp(message.JoinTime), included["country_code"], fromString(message.CountryCode), included["language_code"], fromString(message.LanguageCode), included["pack_code"], fromUint32(message.PackCode), included["rank"], fromInt32(int32(message.Rank)), included["IANA_country_code"], fromString(message.IANACountryCode), included["whatAboutThis"], fromInt64(message.WhatAboutThis), included["big_unsigned_int"], message.BigUnsignedInt, fromString(message.Id))
 	if err != nil {
 		return
 	}
 
-	if included("badges") {
+	if included["badges"] {
 		_, err = transaction.ExecContext(ctx, "delete from `boy_scout_badges` where `id` = ?;", fromString(message.Id))
 		if err != nil {
 			return
 		}
 	}
 
-	if included("badges") && len(message.Badges) != 0 {
+	if included["badges"] && len(message.Badges) != 0 {
 		parameters = nil
 		for i, element := range message.Badges {
 			parameters = append(parameters, fromString(message.Id), i, fromInt32(int32(element)))
@@ -275,14 +264,14 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 		}
 	}
 
-	if included("favorite_songs") {
+	if included["favorite_songs"] {
 		_, err = transaction.ExecContext(ctx, "delete from `boy_scout_favorite_songs` where `id` = ?;", fromString(message.Id))
 		if err != nil {
 			return
 		}
 	}
 
-	if included("favorite_songs") && len(message.FavoriteSongs) != 0 {
+	if included["favorite_songs"] && len(message.FavoriteSongs) != 0 {
 		parameters = nil
 		for i, element := range message.FavoriteSongs {
 			parameters = append(parameters, fromString(message.Id), i, fromString(element))
@@ -293,14 +282,14 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 		}
 	}
 
-	if included("camping_trips") {
+	if included["camping_trips"] {
 		_, err = transaction.ExecContext(ctx, "delete from `boy_scout_camping_trips` where `id` = ?;", fromString(message.Id))
 		if err != nil {
 			return
 		}
 	}
 
-	if included("camping_trips") && len(message.CampingTrips) != 0 {
+	if included["camping_trips"] && len(message.CampingTrips) != 0 {
 		parameters = nil
 		for i, element := range message.CampingTrips {
 			parameters = append(parameters, fromString(message.Id), i, fromDate(element))
@@ -311,14 +300,14 @@ func UpdateBoyScout(ctx context.Context, db *sql.DB, message *pb.BoyScout, field
 		}
 	}
 
-	if included("mask") {
+	if included["mask"] {
 		_, err = transaction.ExecContext(ctx, "delete from `boy_scout_mask` where `id` = ?;", fromString(message.Id))
 		if err != nil {
 			return
 		}
 	}
 
-	if included("mask") && fieldMaskLen(message.Mask) != 0 {
+	if included["mask"] && fieldMaskLen(message.Mask) != 0 {
 		parameters = nil
 		for i, element := range message.Mask.Paths {
 			parameters = append(parameters, fromString(message.Id), i, fromString(element))
@@ -456,8 +445,7 @@ func ReadGirlScout(ctx context.Context, db *sql.DB, message *pb.GirlScout) (err 
 // message that are indicated by the specified fieldMask, subject to
 // specified cancellation context ctx. Each element of fieldMask is the
 // name of a field in message whose value is to be used in the database
-// update. If fieldMask is empty or nil, then update all fields from
-// message. Return nil on success, or a non-nil error if an error occurs.
+// update. Return nil on success, or a non-nil error if an error occurs.
 func UpdateGirlScout(ctx context.Context, db *sql.DB, message *pb.GirlScout, fieldMask []string) (err error) {
 	var transaction *sql.Tx
 	defer func() {

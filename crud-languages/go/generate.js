@@ -329,26 +329,14 @@ function funcUpdate({typeName, instructions, types, typePackageAlias}) {
     // // message that are indicated by the specified fieldMask, subject to
     // // specified cancellation context ctx. Each element of fieldMask is the
     // // name of a field in message whose value is to be used in the database
-    // // update. If fieldMask is empty or nil, then update all fields from
-    // // message. Return nil on success, or a non-nil error if an error occurs.
+    // // update. Return nil on success, or a non-nil error if an error occurs.
     // func UpdateFooBar(ctx context.Context, db *sql.DB, message pb.FooBar, fieldMask []string) (err error) {
     //     ... other vars ...
-    //     var fieldMaskMap map[string]bool
-    //     var included func(string) bool
+    //     var included map[string]bool
     //
-    //     if len(fieldMask) == 0 {
-    //         included = func(string) bool {
-    //             return true
-    //         }
-    //     }
-    //     else {
-    //         fieldMaskMap = make(map[string]bool, len(fieldMask))
-    //         for _, field := range fieldMask {
-    //             fieldMaskMap[field] = true
-    //         }
-    //         included = func(field string) bool {
-    //             return fieldMaskMap[field]
-    //         }
+    //     included = make(map[string]bool, len(fieldMask))
+    //     for _, field := range fieldMask {
+    //         included[field] = true
     //     }
     //
     //     ... instructions ...
@@ -368,8 +356,7 @@ function funcUpdate({typeName, instructions, types, typePackageAlias}) {
 message that are indicated by the specified fieldMask, subject to
 specified cancellation context ctx. Each element of fieldMask is the
 name of a field in message whose value is to be used in the database
-update. If fieldMask is empty or nil, then update all fields from
-message. Return nil on success, or a non-nil error if an error occurs.`;
+update. Return nil on success, or a non-nil error if an error occurs.`;
 
     const parameters = [
         {name: 'ctx', type: 'context.Context'},
@@ -400,9 +387,9 @@ message. Return nil on success, or a non-nil error if an error occurs.`;
     // it hasn't been added already, and returns the name of the variable.
     const variable = variableAdder(variables);
 
-    // A variable `included` of function type will be in scope. The generated
-    // code checks whether a field is included by invoking a local function
-    // (`included`), specifying the name of the field as the function argument.
+    // A variable `included` of map[string]bool type will be in scope. The
+    // generated code checks whether a field is included by looking up the
+    // field name in the map.
     //
     // If `included` is never referenced by the generated code, then it doesn't
     // need to be defined, so also keep track of whether `included` has ever
@@ -413,9 +400,9 @@ message. Return nil on success, or a non-nil error if an error occurs.`;
         defineInclusionBoilerplate = true;
 
         return {
-            call: {
-                function: 'included',
-                arguments: [fieldName] // the literal string, quoted
+            index: {
+                object: 'included',
+                index: fieldName // the literal string, quoted
             }
         };
     }
@@ -441,7 +428,7 @@ message. Return nil on success, or a non-nil error if an error occurs.`;
     // need to emit statements that set up the lookup map of field names that
     // are included in the update. Prepend those statements to `statements`.
     //
-    // When would an update function _not_ call `included`? Whenever the
+    // When would an update function _not_ use `included`? Whenever the
     // message type consists of only an ID field. Unlikely, but possible, and
     // if we have unused variables in the generated Go code, it won't compile.
     if (defineInclusionBoilerplate) {
@@ -587,10 +574,8 @@ the database; i.e. deletions are idempotent.`;
 //   instruction).
 // - `rows` is a `*sql.Rows` used when iterating through SQL query results.
 // - `ok` is `bool` used to capture the success or failure of `rows.Next()`.
-// - `fieldMaskMap` is a `map[string]bool` for looking up whether a particular
+// - `included` is a `map[string]bool` for looking up whether a particular
 //   message field is included in the current operation.
-// - `included` is a `func(string)bool` that generalizes `fieldMaskMap` to
-//   support the "everything is included" case.
 //
 // If an instruction encounters an error, it will assign to `err` and then
 // return using a `return` statement without any arguments. Thus the function
@@ -1515,91 +1500,46 @@ const commitTransactionAndReturn = Object.freeze([
 // track of which variables are "included" in the current CRUD operation. Use
 // the specified `variable` to register local variables.
 function inclusionBoilerplate(variable) {
-    // These are the variables used to check whether a field is "included".
-    variable({name: 'fieldMaskMap', goType: 'map[string]bool'});
-    variable({name: 'included', goType: 'func(string) bool'});
+    // This variable is used to check whether a field is "included".
+    variable({name: 'included', goType: 'map[string]bool'});
 
-    // Set up the "included" function, whose form depends on whether the
-    // `fieldMask` parameter is empty.
+    // Set up the "included" map
     //
-    //     if len(fieldMask) == 0 {
-    //         included = func(string) bool {
-    //             return true
-    //         }
+    //     included = make(map[string]bool, len(fieldMask))
+    //     for _, field := range fieldMask {
+    //         included[field] = true
     //     }
-    //     else {
-    //         fieldMaskMap = make(map[string]bool, len(fieldMask))
-    //         for _, field := range fieldMask {
-    //             fieldMaskMap[field] = true
-    //         }
-    //         included = func(field string) bool {
-    //             return fieldMaskMap[field]
-    //         }
-    //     }
+
     const lenOfFieldMask = {call: {
         function: 'len',
         arguments: [{symbol: 'fieldMask'}]}};
 
-    return [{if: {
-        // if len(fieldMask) == 0 {
-        condition: {equal: {
-            left: lenOfFieldMask,
-            right: 0}},
+    return [
+        // included = make(map[string]bool, len(fieldMask))
+        {assign: {
+            left: ['included'],
+            right: [{call: {
+                function: 'make',
+                arguments: [
+                    {symbol: 'map[string]bool'},
+                    lenOfFieldMask
+                ]}}]
+        }},
 
-        //     included = func(string) bool {
-        //         return true
-        //     }
-        body: [{assignFunc: {
-            left: 'included',
-            parameters: [{type: 'string'}],
-            results: [{type: 'bool'}],
-            body: [{
-                return: [true]
-            }]
-        }}],
-        // else {
-        elseBody: [
-            // fieldMaskMap = make(map[string]bool, len(fieldMask))
-            {assign: {
-                left: ['fieldMaskMap'],
-                right: [{call: {
-                    function: 'make',
-                    arguments: [
-                        {symbol: 'map[string]bool'},
-                        lenOfFieldMask
-                    ]}}]
-            }},
-
-            // for _, field := range fieldMask {
-            //     fieldMaskMap[field] = true
-            // }
-            {rangeFor: {
-                variables: ['_', 'field'],
-                sequence: {symbol: 'fieldMask'},
-                body: [{assign: {
-                    left: [{index: {
-                        object: 'fieldMaskMap',
-                        index: {symbol: 'field'}
-                    }}],
-                    right: [true]
-                }}]
-            }},
-
-            // included = func(field string) bool {
-            //     return fieldMaskMap[field]
-            // }
-            {assignFunc: {
-                left: 'included',
-                parameters: [{name: 'field', type: 'string'}],
-                results: [{type: 'bool'}],
-                body: [{return: [
-                    {index: {
-                        object: 'fieldMaskMap',
-                        index: {symbol: 'field'}
-                    }}
-                ]}]
-            }}
-        ]}},
+        // for _, field := range fieldMask {
+        //     included[field] = true
+        // }
+        {rangeFor: {
+            variables: ['_', 'field'],
+            sequence: {symbol: 'fieldMask'},
+            body: [{assign: {
+                left: [{index: {
+                    object: 'included',
+                    index: {symbol: 'field'}
+                }}],
+                right: [true]
+            }}]
+        }},
 
         {spacer: 1}
     ];
